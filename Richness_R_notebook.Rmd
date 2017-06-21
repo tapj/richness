@@ -20,6 +20,17 @@ Ou aim is to develop a robust model that can link low microbial diversity and lo
 
 ![design](study_design.png)
 
+Color code to use:
+- color=#dfc27d; * AIN-93G 0%;
+- color=#a6bddb; * AIN-93G w/o cel. 0%;
+- color=#74a9cf; * AIN-93G w/o cel. 0.25%;
+- color=#3690c0; * AIN-93G w/o cel. 0.5%;
+- color=#0570b0; * AIN-93G w/o cel. 1%;
+- color=#045a8d; * AIN-93G w/o cel. 2%;
+- color=#023858; * AIN-93G w/o cel. 3%;
+
+
+
 
 
 ## Loading 16S sequencing data and associated metadata
@@ -45,6 +56,7 @@ library(earlywarnings)
 library(gganimate)
 library(cowplot)
 library(microbiome)
+library(viridis)
 
 
 ```
@@ -168,6 +180,10 @@ ggplot()+geom_point(aes(x=A1,y=A2, color=as.character(DNA_Group))) + scale_color
 
 ```
 
+
+## microbiota type clustering
+
+
 ```{r enterotype, echo=TRUE, fig.height=5, fig.width=15}
 
 genus_stool.int.denoized =  round(noise.removal(genus, percent=1) * 30000)
@@ -253,19 +269,23 @@ data.frame(microbiota_type=as.character(microbiota_type), t(genus[genus_drivers,
 
 ```
 
-```{r}
+### grouping DMM group by pvclust
 
 
-pclust = pvclust(as.data.frame(prop.table(fitted(best_genus), 2)) , method.dist=dist.JSD, nboot=100, method.hclust="complete")
+```{r, message=FALSE, warning=FALSE}
+
+
+pclust = pvclust::pvclust(as.data.frame(prop.table(fitted(best_genus), 2)) , method.dist=dist.JSD, nboot=100, method.hclust="average")
 pvclust::pvpick(pclust, 0.95)$clusters %>% melt
 
-
+plot(pclust)
+pvclust::pvrect(pclust)
 
 ```
 
 
 
-
+## bistable genus
 
 Bistable genus analysis on Dominant Genera which contribute to the DMN models
 ```{r}
@@ -326,6 +346,8 @@ merge(t(genus[bistable_dominant_genera,])+10^-4, mapping_file[,c("X.SampleID", "
 ```
 
 
+## enterotype vs richness
+
 ```{r enterotype_richness_exploration_2, fig.height=8, fig.width=12}
 
 
@@ -353,6 +375,10 @@ data.frame(observed_otu, microbiota_type = as.character(microbiota_type), mappin
 
 
 ```
+
+
+## betadiversity dynamics and community type
+
 ```{r enterotype_exploration_3, fig.height=10, fig.width=10, fig.show = "animate"}
 
 
@@ -365,6 +391,7 @@ ggplot()+geom_point(aes(x=A1,y=A2, color=as.character(microbiota_type)), size=4,
 
 
 p = merge(genus_pco$li, mapping_file, by.x="row.names", by.y="X.SampleID") %>% 
+  mutate(DSS=fct_recode(DSS,`3` = "AIN"))%>%
   merge(.,data.frame(observed_otu, microbiota_type = as.character(microbiota_type)), by.x="Row.names", by.y="row.names") %>% 
   ggplot(aes(frame=fct_relevel(Time, c("Tm49","Tm41","Tm34","Tm20","Tm13","Tm7","Tm1","T3","T13","T17","T27","T31","T40","T47","T63","T68")))) + 
   geom_point(aes(
@@ -372,8 +399,8 @@ p = merge(genus_pco$li, mapping_file, by.x="row.names", by.y="X.SampleID") %>%
     y=A2, 
     color=as.character(microbiota_type)), 
     
-    size=1) + facet_wrap(~DNA_Group) +
-  scale_color_brewer("Microbiota type",type="qual") + 
+    size=1) + facet_wrap(~DSS+Diet) +
+  scale_color_viridis("Microbiota type", discrete = TRUE) + 
   theme_dark() 
   #gganimate(p, width = 5, height = 5, dpi = 600)
  
@@ -480,6 +507,12 @@ merge(t(noise.removal(genus, percent=1)), mapping_file[,c("X.SampleID", "DNA_Gro
 
 ```
 
+
+
+
+
+## Microbiota alternative states
+
 The first component is impacted by the diet, we took the second to study chronical DSS% perturbation. 
 
 ```{r, message=FALSE}
@@ -502,7 +535,7 @@ source("PlotPotential2.r")
 
 #c("Tm49","Tm41","Tm34","Tm20","Tm13","Tm7","Tm1","T3","T13","T17","T27","T31","T40","T47","T63","T68")
 
-test = merge(genus_pco$li, mapping_file %>% merge(., rat_metadata, by.x="Rat_ID", by.y="Animal_id_2"), by.x="row.names", by.y="X.SampleID") %>% merge(.,data.frame(observed_otu, microbiota_type = as.character(microbiota_type)), by.x="Row.names", by.y="row.names") %>% filter(Time %in% c("T68") ) %>% filter(Study_group != "1")
+test = merge(genus_pco$li, mapping_file %>% merge(., rat_metadata, by.x="Rat_ID", by.y="Animal_id_2"), by.x="row.names", by.y="X.SampleID") %>% merge(.,data.frame(observed_otu, microbiota_type = as.character(microbiota_type)), by.x="Row.names", by.y="row.names") %>% filter(Time %in% c("Tm1") ) %>% filter(Study_group != "1")
 
 
 #res2 <- movpotential_ews(c(test$A1,sample(test$A1, 10, replace=TRUE)), c(rep(0,length(test$A1)), sample(test$DSS_percent, 10, replace = TRUE)))
@@ -513,11 +546,50 @@ res2 <- movpotential_ews(test$A2, test$DSS %>% as.character %>% as.numeric)
 PlotPotential2(res2$res, title = '', 
                ylab.text = 'Microbial State\n(JSD derived metric)', xlab.text = 'Chronical Perturbation strength (DSS %)', 
            cutoff = 0.5, plot.contours = TRUE, binwidth = 0.1) + theme_classic() 
-  
 
 
 
 ```
+
+
+```{r}
+
+
+
+time_point = c("Tm1","T3","T13","T17","T27","T31","T40","T63","T68")
+
+res_list = vector("list", length(time_point))
+
+names(res_list) = time_point
+
+for(i in time_point){
+
+test = merge(genus_pco$li, mapping_file %>% merge(., rat_metadata, by.x="Rat_ID", by.y="Animal_id_2"), by.x="row.names", by.y="X.SampleID") %>% merge(.,data.frame(observed_otu, microbiota_type = as.character(microbiota_type)), by.x="Row.names", by.y="row.names") %>% filter(Time %in% i ) %>% filter(Study_group != "1")
+
+
+#res2 <- movpotential_ews(c(test$A1,sample(test$A1, 10, replace=TRUE)), c(rep(0,length(test$A1)), sample(test$DSS_percent, 10, replace = TRUE)))
+
+res2 <- movpotential_ews(test$A2, test$DSS %>% as.character %>% as.numeric)
+
+
+p=PlotPotential2(res2$res, title = '', 
+               ylab.text = 'Microbial State\n(JSD derived metric)', xlab.text = 'Chronical Perturbation strength (DSS %)', 
+           cutoff = 0.5, plot.contours = TRUE, binwidth = 0.1) + theme_classic()
+
+res_list[[i]] = res2
+
+res_list[[i]]$plot = p
+
+
+
+}
+
+
+
+
+```
+
+
 
 
 Which rat microbiota from the DSS2% have switch to an alternative state?
