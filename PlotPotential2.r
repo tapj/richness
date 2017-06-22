@@ -31,8 +31,8 @@ PlotPotential2 = function (res, title = "", xlab.text, ylab.text, cutoff = 0.5,
 }
 
 
-PlotPotential_list = function (res_list, title = "", xlab.text, ylab.text, cutoff = 0.5, 
-                           plot.contours = TRUE, binwidth = 0.2, bins = NULL) 
+Potential_list = function (res_list, title = "", xlab.text, ylab.text, cutoff = 0.5, 
+                           plot.contours = FALSE, binwidth = 0.2, bins = NULL, output="ani.gif") 
 {
   
   res_to_df = function(res){
@@ -54,12 +54,25 @@ PlotPotential_list = function (res_list, title = "", xlab.text, ylab.text, cutof
   return(df)
   }
   
-  lapply(res_list, res_to_df)
+  df_list = lapply(res_list, res_to_df)
   
+  tf = tweenr::tween_states(df_list, 
+                            tweenlength=2, statelength=1, 
+                            ease="linear", nframes = 300)
   
+  return(tf)
   
-  p <- ggplot2::ggplot(df, aes(bg.var, phylotype, z = potential)) + 
-    geom_tile(aes(fill = potential)) + scale_fill_gradientn(colours = topo.colors(10))
+}  
+
+
+Potential_animate=function(tf, output = "microbiota_animation.gif", speed = 10) {
+
+animation::ani.options(interval = 1/speed)
+
+animation::saveGIF({   
+ for(i in 1:length(table(tf[,4]))) {
+ p <- ggplot2::ggplot(tf[tf[,".frame"] %in% i,], aes(bg.var, phylotype, z = potential, frame = .frame)) 
+  p <- p + geom_tile(aes(fill = potential)) + scale_fill_gradientn(colours = topo.colors(10))
   if (plot.contours) {
     if (!is.null(bins)) {
       warning("bins argument is overriding the binwidth argument!")
@@ -69,7 +82,20 @@ PlotPotential_list = function (res_list, title = "", xlab.text, ylab.text, cutof
       p <- p + stat_contour(binwidth = binwidth)
     }
   }
-  p <- p + xlab(xlab.text) + ylab(ylab.text) + labs(title = title)
-  p
+  p <- p + xlab(xlab.text) + ylab(ylab.text) + labs(title = title) + ylim(-0.2, 0.2) + guides(fill=FALSE)
+  print(p)
+  #output = paste0("plot",i,".png")
+  #ggsave(plot = p, filename = output)
+  
+ }
+}, movie.name = output, clean = TRUE)
+  
+  
+# gganimate did not work so I had to use saveGIF instead
+  #gganimate(p, output, title_frame = F, ani.width = 400, 
+  #          ani.height = 400)
+  
+  #gganimate(p, output, title_frame = F) 
+  
 }
 

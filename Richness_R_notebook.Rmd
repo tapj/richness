@@ -30,6 +30,12 @@ Color code to use:
 - color=#023858; * AIN-93G w/o cel. 3%;
 
 
+```{r}
+
+Grp_color = c("#dfc27d","#a6bddb","#74a9cf","#3690c0","#0570b0","#045a8d","#023858")
+
+
+```
 
 
 
@@ -51,13 +57,13 @@ library(GGally)
 source("https://raw.githubusercontent.com/tapj/IBSMicrobiota/master/R/mclapply.hack.R")
 library(stringr)
 library(broom)
-source("PlotPotential2.r")
+
 library(earlywarnings)
 library(gganimate)
 library(cowplot)
 library(microbiome)
 library(viridis)
-
+source("PlotPotential2.r")
 
 ```
 
@@ -168,13 +174,24 @@ genus_pco = dudi.pco(genus_jsd, scannf=FALSE, nf=10)
 
 ```
 
-```{r, eval=FALSE, fig.width=10, include=FALSE}
+
+### PCoA over time
+
+```{r, fig.width=10}
+
 
 
 merge(genus_pco$li, mapping_file, by.x="row.names", by.y="X.SampleID") %>%
+merge(., rat_metadata, by.x="Rat_ID", by.y="Animal_id_2") %>%
   
+ggplot()+geom_point(aes(x=A1,y=A2, color=as.character(Study_group)))  + facet_wrap(~fct_relevel(Time, c("Tm49","Tm41","Tm34","Tm20","Tm13","Tm7","Tm1","T3","T13","T17","T27","T31","T40","T47","T63","T68"))) + theme_dark() + scale_color_manual(values = Grp_color)
   
-ggplot()+geom_point(aes(x=A1,y=A2, color=as.character(DNA_Group))) + scale_color_brewer(type="seq") + facet_wrap(~fct_relevel(Time, c("Tm7","Tm1","T40","T63","T68"))) + theme_dark()
+
+
+
+merge(genus_pco$li, mapping_file, by.x="row.names", by.y="X.SampleID") %>%
+merge(., rat_metadata, by.x="Rat_ID", by.y="Animal_id_2") %>%
+ggplot()+geom_point(aes(x=A3,y=A2, color=as.character(Study_group))) + facet_wrap(~fct_relevel(Time, c("Tm49","Tm41","Tm34","Tm20","Tm13","Tm7","Tm1","T3","T13","T17","T27","T31","T40","T47","T63","T68"))) + theme_dark() + scale_color_manual(values = Grp_color)
   
   
 
@@ -552,7 +569,7 @@ PlotPotential2(res2$res, title = '',
 ```
 
 
-```{r}
+```{r, message=FALSE, warning=FALSE}
 
 
 
@@ -571,12 +588,13 @@ test = merge(genus_pco$li, mapping_file %>% merge(., rat_metadata, by.x="Rat_ID"
 
 res2 <- movpotential_ews(test$A2, test$DSS %>% as.character %>% as.numeric)
 
+#res2 <- movpotential_ews(test$A2, test$DSS %>% as.character %>% as.numeric %>% add(0.01) %>% log2 %>% round(0))
 
 p=PlotPotential2(res2$res, title = '', 
                ylab.text = 'Microbial State\n(JSD derived metric)', xlab.text = 'Chronical Perturbation strength (DSS %)', 
            cutoff = 0.5, plot.contours = TRUE, binwidth = 0.1) + theme_classic()
 
-res_list[[i]] = res2
+res_list[i] = res2
 
 res_list[[i]]$plot = p
 
@@ -584,10 +602,25 @@ res_list[[i]]$plot = p
 
 }
 
+tf = Potential_list(res_list)
+
 
 
 
 ```
+
+
+
+```{r}
+
+
+
+
+
+```
+
+
+
 
 
 
@@ -614,12 +647,6 @@ TO DO: clusteriser la dynamique.
 
 
 ```
-
-
-
-
-
-
 
 
 
