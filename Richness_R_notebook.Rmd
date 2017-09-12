@@ -1007,11 +1007,53 @@ mutate(diet = fct_recode(Time,
                             `-8` = "T68"
                             
                             ))  %>%
+  
+  mutate(press_cumul_day = fct_recode(Time,
+                            `0` = "Tm1", 
+                            `3` = "T3",
+                            `13` = "T13",
+                            `17` = "T17",
+                            `27` = "T27",
+                            `31` = "T31",
+                            `22` = "T40",
+                            `15` = "T47",
+                            `0` = "T63",
+                            `-6` = "T68"
+                            
+                            ))  %>%
+  
+mutate(DSSpress = fct_recode(Time, 
+                            Water = "Tm49",  
+                            Water = "Tm41", 
+                            Water = "Tm34", 
+                            Water = "Tm20", 
+                            Water = "Tm13", 
+                            Water = "Tm7", 
+                            DSS = "Tm1", 
+                            DSS   = "T3",
+                            DSS = "T13",
+                            DSS   = "T17",
+                            DSS = "T27",
+                            DSS   = "T31",
+                            Water = "T40",
+                            Water = "T47",
+                            Water = "T63",
+                            Water = "T68"
+                            
+                            )) %>%
+  
   mutate(Time=Time %>% gsub("T","",.) %>% gsub("m","-",.) %>% as.character %>% as.numeric) %>%
   filter(Time > -2) %>%
   mutate(perturbation = perturbation %>% as.character %>% as.numeric) %>%
   filter(Study_group != "G1") %>%
   arrange(Time) -> akk_df
+
+```
+
+
+
+
+```{r, fig.height=10, fig.width=10}
 
 
 hysteresis_profile_plot =
@@ -1031,6 +1073,25 @@ hysteresis_profile_plot =
 
 
 
+hysteresis_profile_press_plot =
+  akk_df %>%
+  ggplot(aes(x=press_cumul_day %>% as.character %>% as.numeric ,y=genus+10^-6)) +
+  #ggplot(aes(x=perturbation ,y=A3)) +
+  #geom_point() + 
+  #facet_wrap(~Study_group+Rat_ID, ncol=5) + 
+  facet_wrap(~hysteresis_grp, ncol=3) +
+  geom_path(aes(group=Rat_ID, color=DSSpress),arrow = arrow(length=unit(0.20,"cm"), type = "closed") ) + 
+  #geom_text(aes(label=Time)) + 
+  ylab("Akkermansia") + xlab("press/nperturbation") +
+  geom_hline(yintercept = 10^-1.98, linetype =2) + 
+  geom_vline(xintercept = 0, linetype =2) + 
+  scale_y_log10() +
+  scale_color_manual("Press", values=c(DSS="red",Water="blue"))
+
+
+
+
+
 hysteresis_by_group_plot =
 akk_df %>%
   select(hysteresis_grp,Study_group, Rat_ID) %>% 
@@ -1045,6 +1106,8 @@ akk_df %>%
   scale_fill_manual("Grp",values = Grp_color[-1]) + xlab("")
   
 
+
+
 pertubation_pulse_plot =
 akk_df %>%
   select(Time,DSSpulse, perturbation) %>%
@@ -1052,6 +1115,10 @@ akk_df %>%
   ggplot(aes(y=Time+1, x=perturbation)) + geom_path(color=c(rep(c("red","blue"),3),rep("blue",4)), arrow = arrow(length=unit(0.20,"cm"), type = "closed")) + 
   coord_flip() + xlab("perturbation\nsteps") +
   geom_vline(xintercept = 0, linetype =2) + ylab("Time")
+
+
+
+
 
 
 YlOrBr <- c("#FFFFD4", "#FED98E", "#FE9929", "#D95F0E", "#993404", "#000000")
@@ -1070,9 +1137,17 @@ akk_df %>%
   scale_fill_manual("score", values=colorRampPalette(YlOrBr)(10)) + xlab("Histological score per group profile")
   
 
-
-
-
+akk_df %>%
+  select(hysteresis_grp,Study_group, Rat_ID) %>% 
+  unique %>%
+  merge(.,histo, by="Rat_ID") %>%
+  mutate(DSS_group = ifelse(Study_group == "G6" | Study_group == "G7", "high", "low" )) %>%
+  group_by(hysteresis_grp,Study_group, score_histo) %>%
+  summarise (n = n()) %>%
+  mutate(frequency = n / sum(n)) %>%
+  ggplot(aes(x=DSS_group, y=frequency)) + 
+  geom_bar(aes(fill=as.character(score_histo)), position="dodge", stat = "identity") + 
+  scale_fill_manual("score", values=colorRampPalette(YlOrBr)(10)) + xlab("Histological score per group profile") + facet_wrap(~hysteresis_grp)
 
 
 
@@ -1084,12 +1159,88 @@ plot_grid(pertubation_pulse_plot,
 
 
 
-
-
 ```
 
 
 
+```{r, fig.height=10, fig.width=10}
+
+
+pertubation_press_plot =
+akk_df %>%
+  select(Time,DSSpress, press_cumul_day) %>%
+  unique %>%
+  ggplot(aes(y=Time+1, x=press_cumul_day %>% as.character %>% as.numeric)) +
+  #geom_point() +
+  geom_path(color=c(rep(c("red","pink"),2),"red",rep("blue",5)), arrow = arrow(length=unit(0.20,"cm"), type = "closed")) + 
+  coord_flip() + xlab("press\nperturbation") +
+  geom_vline(xintercept = 0, linetype =2) + ylab("Time (days)")
+
+
+hysteresis_profile_press_smooth_plot =
+  akk_df %>%
+  rbind(., 
+        
+        akk_df %>% filter(press_cumul_day == 31) %>% mutate(DSSpress = "Water")
+        
+        
+        ) %>%
+  
+  
+  ggplot(aes(x=press_cumul_day %>% as.character %>% as.numeric ,y=genus+10^-6)) +
+  #ggplot(aes(x=perturbation ,y=A3)) +
+  #geom_point() + 
+  #facet_wrap(~Study_group+Rat_ID, ncol=5) + 
+  facet_wrap(~hysteresis_grp, ncol=3) +
+  #geom_path(aes(group=Rat_ID, color=DSSpress),arrow = arrow(length=unit(0.20,"cm"), type = "closed") ) + 
+  geom_smooth(aes(group=paste(hysteresis_grp,DSSpress), color=DSSpress)) + 
+  #geom_text(aes(label=Time)) + 
+  ylab("Akkermansia") + xlab("press\nperturbation") +
+  geom_hline(yintercept = 10^-1.98, linetype =2) + 
+  geom_vline(xintercept = 0, linetype =2) + 
+  scale_y_log10() +
+  scale_color_manual("Press", values=c(DSS="red",Water="blue")) +
+  theme(legend.position = c(0.1, 0.3))
+
+
+
+
+
+histo_DSS_hysteresis_barplot =
+akk_df %>%
+  #filter(Study_group != "G2") %>%
+  select(hysteresis_grp,Study_group, Rat_ID) %>% 
+  unique %>%
+  merge(.,histo, by="Rat_ID") %>%
+  mutate(DSS_group = ifelse(Study_group == "G5" | Study_group == "G6" | Study_group == "G7", "high", "low" )) %>%
+  group_by(hysteresis_grp,DSS_group) %>%
+  summarise(n = n(), m = mean(score_histo), sem = sd(score_histo)/n()) %>%
+  ungroup() %>%
+  ggplot(aes(x=hysteresis_grp, y=m, fill=DSS_group)) +
+  geom_bar(stat="identity", position="dodge", color="black") + 
+  geom_errorbar(aes(ymin=m-sem,ymax=m+sem),width=.2, position=position_dodge(.9)) +
+  scale_fill_brewer(type="qual") +
+  ylab("Histological score") +
+  xlab("") +
+  theme(legend.position = c(0.1, 0.9))
+
+
+
+
+
+
+plot_grid(pertubation_press_plot, 
+          #hysteresis_profile_press_plot, 
+          hysteresis_profile_press_smooth_plot,
+          #hysteresis_by_group_plot,
+          histo_DSS_hysteresis_barplot,
+          ncol=1, rel_heights = c(2,4,4), labels = "AUTO", align = "h")
+
+
+
+
+
+```
 
 
 
