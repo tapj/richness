@@ -262,10 +262,19 @@ merge(observed_otu, mapping_file, by.x="row.names", by.y="X.SampleID") %>%
   #select(A1,A2,A3,Time,Rat_ID,Study_group) %>%
   #melt(id.vars=c("Time","Rat_ID","Study_group")) %>%
   
-ggplot() + geom_line(aes(y=S_obs, 
+  arrange(Rat_ID,Time) %>%
+  group_by(Rat_ID) %>%
+  mutate(S_obs_delta = abs(S_obs - lag(S_obs))) %>% 
+  ungroup() %>%
+  group_by(Study_group, Time) %>%
+  summarise(S_obs_delta = median(S_obs_delta)) %>%
+  
+ggplot() + geom_line(aes(y=S_obs_delta, 
                          x = Time, 
-                         group = Rat_ID , color=Study_group)) + 
-  facet_wrap(~Study_group)  + theme_bw() + scale_color_manual("Grp",values = Grp_color) + geom_vline(xintercept=c(-1,13,27), col="red")
+#                         group = Rat_ID , color=Study_group)) + 
+                                          color=Study_group)) +
+  facet_wrap(~Study_group)  + 
+  theme_bw() + scale_color_manual("Grp",values = Grp_color) + geom_vline(xintercept=c(-1,13,27), col="red")
   
   
 
@@ -459,12 +468,29 @@ DirichletMultinomial::heatmapdmn(fit1=fit_genus_list[[1]][[1]], fitN=best_genus,
 
 ```
 
-```{r enterotype_drivers_exploration, fig.height=12, fig.width=12, include=FALSE}
+```{r enterotype_drivers_exploration, fig.height=5, fig.width=12, include=FALSE}
 
 fit_genus = fit_genus_list[[1]]
 
 genus_drivers = 
 rownames(genus_stool.int.denoized)[rev(head(order(  rowSums(abs(fitted(fit_genus[[6]], scale = TRUE) - as.vector(fitted(fit_genus[[1]], scale = TRUE))))  , decreasing = TRUE), 16))]
+
+
+
+ f = fitted(fit_genus[[11]], scale = TRUE) - as.vector(fitted(fit_genus[[1]], scale = TRUE))
+ 
+ f %>% 
+   abs %>%
+  apply(1,sum) %>%
+   as_tibble() %>%
+   tibble::rownames_to_column("genus") %>%
+    arrange(desc(value)) %>%
+  top_n(16) %>%
+   tidyr::separate(genus,into=c("Domain","Phylum","Class","Order","Family","Genus"),sep=";") %>%
+   ggplot() + geom_bar(aes(y=value, x=paste(Family,Genus) ), stat="identity") +
+   coord_flip() + xlab("") + ylab("Genus DMM weights")
+
+
 
 #cumsum((rev(sort(  rowSums(abs(fitted(fit_genus[[6]], scale = TRUE) - as.vector(fitted(fit_genus[[1]], scale = TRUE)))))))/2.037391) # a way to select important genus, 16 out of 53 dominant genera cover 80% of DMN signal with k=6 or k=11
 
@@ -476,6 +502,11 @@ merge(t(genus[genus_drivers,])+10^-4, mapping_file[,c("X.SampleID", "Time")], by
 
 
 microbiota_type = mixture(best_genus, assign=TRUE)
+
+
+
+
+
 
 
 data.frame(microbiota_type=as.character(microbiota_type), t(genus[genus_drivers,])+10^-4, check.names=FALSE) %>% melt(.,id.vars="microbiota_type") %>%  ggplot() + geom_violin(aes(y=value, x=variable, fill=microbiota_type)) + facet_wrap(~gsub(";","\n",gsub("D_","",variable)), scale="free") + scale_fill_viridis(discrete = TRUE) + scale_x_discrete(labels="") + scale_y_log10() + ylab("Rel. abundance") + xlab("")
@@ -507,7 +538,7 @@ pvclust::pvrect(pclust)
 ## bistable genus
 
 Bistable genus analysis on Dominant Genera which contribute to the DMN models
-```{r}
+```{r, fig.height=8}
 
 b = apply(
   log10(genus[genus_drivers,]+10^-4), 1, function(x) 1-microbiome::bimodality(x,bs.iter = 100) 
@@ -1196,7 +1227,8 @@ hysteresis_profile_press_smooth_plot =
   geom_smooth(aes(group=paste(hysteresis_grp,DSSpress), color=DSSpress)) + 
   #geom_text(aes(label=Time)) + 
   ylab("Akkermansia") + xlab("press\nperturbation") +
-  geom_hline(yintercept = 10^-1.98, linetype =2) + 
+  geom_hline(yintercept = 10^-1.98, linetype =2) +
+  #annotate("text", x = 25, y = 2*10^-1.98, label = "Tipping point") +
   geom_vline(xintercept = 0, linetype =2) + 
   scale_y_log10() +
   scale_color_manual("Press", values=c(DSS="red",Water="blue")) +
@@ -1214,7 +1246,7 @@ akk_df %>%
   merge(.,histo, by="Rat_ID") %>%
   mutate(DSS_group = ifelse(Study_group == "G5" | Study_group == "G6" | Study_group == "G7", "high", "low" )) %>%
   group_by(hysteresis_grp,DSS_group) %>%
-  summarise(n = n(), m = mean(score_histo), sem = sd(score_histo)/n()) %>%
+  summarise(n = n(), m = mean(score_histo), sem = sd(score_histo)/sqrt(n())) %>%
   ungroup() %>%
   ggplot(aes(x=hysteresis_grp, y=m, fill=DSS_group)) +
   geom_bar(stat="identity", position="dodge", color="black") + 
@@ -1241,6 +1273,69 @@ plot_grid(pertubation_press_plot,
 
 
 ```
+
+
+
+### microbial interaction with akkermansia
+
+```{r, fig.width=15}
+
+
+mapping_file %>% 
+  merge(
+    ., 
+    rat_metadata, 
+    by.x="Rat_ID", 
+    by.y="Animal_id_2"
+    ) %>% 
+  merge(.,hysteresis, by = "Rat_ID", all.x=TRUE) %>%
+  merge(., 
+        genus %>% noise.removal(percent=1) %>% t, 
+        by.x="X.SampleID", 
+        by.y="row.names") %>%
+  mutate(Time=fct_relevel(Time, c("Tm49","Tm41","Tm34","Tm20","Tm13","Tm7","Tm1","T3","T13","T17","T27","T31","T40","T47","T63","T68"))) %>% 
+  mutate(Time=Time %>% gsub("T","",.) %>% gsub("m","-",.) %>% as.character %>% as.numeric) %>%
+  
+  select(-X.SampleID, -BarcodeSequence, -LinkerPrimerSequence, -samplenr, -INRA_DNA_ID, -DNAextractionOperator, -Time_DSS, -Description, -Animal_id, -Weight, -Bacteroides, -Filiation, -Cage_provider, -Animal.Identification ) %>%
+  filter(Diet != "AIN93G", Time > -10) %>%
+  filter(DSS == "2" | DSS == "3") %>%
+  arrange(Study_group, Rat_ID,Time) %>%
+  melt(id.vars=c("Rat_ID","Time","DSS","Diet","Study_group","hysteresis_grp","D_0__Bacteria;D_1__Verrucomicrobia;D_2__Verrucomicrobiae;D_3__Verrucomicrobiales;D_4__Verrucomicrobiaceae;D_5__Akkermansia")) %>%
+  rename(Akkermansia = `D_0__Bacteria;D_1__Verrucomicrobia;D_2__Verrucomicrobiae;D_3__Verrucomicrobiales;D_4__Verrucomicrobiaceae;D_5__Akkermansia`) %>%
+  group_by(Rat_ID,variable,hysteresis_grp) %>%
+  summarise(akk_cor=cor(Akkermansia,value, method="spearman")) %>%
+  mutate(akk_cor = ifelse(is.na(akk_cor),0,akk_cor)) %>%
+  ungroup() -> akk_cor
+
+
+
+akk_cor%>%
+  group_by(hysteresis_grp,variable) %>%
+  summarise(n=n(), median=median(akk_cor), q25=quantile(akk_cor,0.25), q75 = quantile(akk_cor,0.75) ) %>%
+  filter(abs(median) > 0.4) %>%
+  merge(.,akk_cor, by=c("hysteresis_grp","variable"), all.x=TRUE) %>%
+  tidyr::separate(variable,into=c("Domain","Phylum","Class","Order","Family","Genus"),sep=";") %>%
+  filter(Genus != "Other", Family != "D_5__uncultured") %>%
+  ungroup() %>%
+  ggplot() + geom_boxplot(aes(x=paste(Family,Genus),y=akk_cor, fill=median)) + facet_wrap(~hysteresis_grp) +
+  coord_flip() +
+  scale_fill_continuous(low = "#FF0000", high="#00FF00") +
+  ylab("Genus correlation over time with\nAkkermansia rel. abundance") + xlab("")
+
+
+
+
+
+
+
+
+
+```
+
+
+
+
+
 
 
 
