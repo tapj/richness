@@ -562,12 +562,13 @@ tipping_point =
   as.data.frame(check.names=FALSE) %>% t %>% 
   as.data.frame(check.names=FALSE) %>% set_colnames("Tip")
 
-merge(t(genus[bistable_dominant_genera,])+10^-4, mapping_file[,c("X.SampleID", "Time")], by.x="row.names", by.y="X.SampleID") %>%
-  melt(.,id.vars=c("Row.names","Time")) %>% 
+merge(t(genus[bistable_dominant_genera,])+10^-4, mapping_file[,c("X.SampleID", "Time", "DSS")], by.x="row.names", by.y="X.SampleID") %>%
+  melt(.,id.vars=c("Row.names","Time", "DSS")) %>% 
   merge(.,tipping_point, by.x="variable", by.y="row.names", all = TRUE ) %>%
-  ggplot() + geom_histogram(aes(x=value), fill="white") + facet_wrap(~gsub(";","\n",gsub("D_","",variable)), scale="free") + scale_x_log10() + theme_dark() + geom_vline(aes(xintercept = Tip), col="red", size=2, alpha = 0.75)
+  filter(DSS == "3" | DSS == "2" | DSS == "1") %>%
+  ggplot() + geom_histogram(aes(x=value), fill="white", bins = 20) + facet_wrap(~gsub(";","\n",gsub("D_","",variable)), scale="free") + scale_x_log10() + theme_dark() + geom_vline(aes(xintercept = Tip), col="red", size=2, alpha = 0.75) + scale_y_log10() #+ geom_density(aes(x=value))
 
-tipping_point
+tipping_point 
 
 ```
 
