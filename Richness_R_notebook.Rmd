@@ -144,6 +144,8 @@ mapping_file %>%
 
 
 
+
+
 mapping_file %>% 
   merge(
     ., 
@@ -161,6 +163,7 @@ mapping_file %>%
   geom_line(aes(y=genus+10^-6, 
                          x = Time, 
                          group = Rat_ID , color=Study_group)) +
+  
   facet_wrap(~Study_group) + xlab("Time") + ylab("Ruminococcus") + scale_y_log10() + 
   #+ theme_dark()
   scale_color_manual("Grp",values = Grp_color) + geom_vline(xintercept=c(-1,13,27), col="red")
@@ -231,7 +234,50 @@ mapping_file %>%
 
 
 
+
+
+
+
 ```
+
+
+```{r}
+
+
+
+
+mapping_file %>% 
+  merge(
+    ., 
+    rat_metadata, 
+    by.x="Rat_ID", 
+    by.y="Animal_id_2"
+    ) %>% 
+  merge(., 
+        genus[row.names(genus) %>% grep("Akkermansia",.),] %>% as.data.frame(row.names="genus") %>% t , 
+        by.x="X.SampleID", 
+        by.y="row.names") %>% 
+  mutate(Time=fct_relevel(Time, c("Tm49","Tm41","Tm34","Tm20","Tm13","Tm7","Tm1","T3","T13","T17","T27","T31","T40","T47","T63","T68"))) %>% 
+  mutate(Time=Time %>% gsub("T","",.) %>% gsub("m","-",.) %>% as.character %>% as.numeric) %>%
+  filter(Time > -15) %>%
+  filter(Study_group %in% c("G6","G7") ) %>%
+  ggplot() + #geom_point(aes(x=Time, y=genus+10^-6)) + 
+  geom_line(aes(y=genus+10^-6, 
+                         x = Time, 
+                         group = Rat_ID , color=Study_group)) +
+  facet_wrap(~Rat_ID) + xlab("Time") + ylab("Akkermansia") + scale_y_log10() + 
+  #+ theme_dark()
+  #scale_color_manual("Grp",values = Grp_color) +
+  geom_vline(xintercept=c(-1,13,27), col="red")
+
+
+
+
+
+
+
+```
+
 
 
 
