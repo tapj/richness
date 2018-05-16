@@ -14,22 +14,21 @@ output:
 
 ## Introduction
 
-Pre/Probiotic & microbial richness
-
-Ou aim is to develop a robust model that can link low microbial diversity and low grade inflammation. In order to test the capacity of anti-inflammatory probiotics or prebiotics to increase the bacterial diversity. For that, we plan to use DSS to induce colonic low grade inflammation in rats and measure bacterial diversity by sequencing the 16S rRNA genes of the fecal DNA. Diversity indexes (Shannon, Observed OTUs, beta-diversity will be computed before, during and after the DSS treatment).
+Our aim is to develop a robust model that can link microbial diversity and low grade inflammation. We use DSS to induce colonic low grade inflammation in rats and measure bacterial diversity by sequencing the 16S rRNA genes of the fecal DNA. Diversity indexes (Shannon, Observed OTUs, beta-diversity will be computed before, during and after the DSS treatment).
 
 ## Study design
 
-![design](study_design.png)
+![here is the study design](study_design.png)
 
 Color code to use:
-- color=#dfc27d; * AIN-93G 0%;
-- color=#a6bddb; * AIN-93G w/o cel. 0%;
-- color=#74a9cf; * AIN-93G w/o cel. 0.25%;
-- color=#3690c0; * AIN-93G w/o cel. 0.5%;
-- color=#0570b0; * AIN-93G w/o cel. 1%;
-- color=#045a8d; * AIN-93G w/o cel. 2%;
-- color=#023858; * AIN-93G w/o cel. 3%;
+
+ - color=#dfc27d; * AIN-93G 0%;
+ - color=#a6bddb; * AIN-93G w/o cel. 0%;
+ - color=#74a9cf; * AIN-93G w/o cel. 0.25%;
+ - color=#3690c0; * AIN-93G w/o cel. 0.5%;
+ - color=#0570b0; * AIN-93G w/o cel. 1%;
+ - color=#045a8d; * AIN-93G w/o cel. 2%;
+ - color=#023858; * AIN-93G w/o cel. 3%;
 
 
 ```{r}
@@ -42,6 +41,8 @@ Grp_color = c("#dfc27d","#a6bddb","#74a9cf","#3690c0","#0570b0","#045a8d","#0238
 
 
 ## Loading 16S sequencing data and associated metadata
+
+here we start to load all R libraries and custom script (code not shown) with study data
 
 ```{r loading_library, message=FALSE, warning=FALSE, include=FALSE}
 
@@ -583,7 +584,7 @@ pvclust::pvrect(pclust)
 
 ## bistable genus
 
-Bistable genus analysis on Dominant Genera which contribute to the DMN models
+Bistable genus analysis on Dominant Genera which contribute to the DMM models
 ```{r, fig.height=8}
 
 b = apply(
@@ -1005,10 +1006,10 @@ histo <- readxl::read_excel("Richness-2017-03-23-Data Transfer Matrix-SDB.xlsx",
     sheet = "Histopathological reading", 
     skip = 2)
 
-histo %<>% .[,c(3,28,39)] %>% 
+histo %>% .[,c(3,28,39)] %>% 
   rename(Rat_ID=`Animal Technical N°\r\nafter\r\n21/03/16\r\n(Rx)`,score_histo=`Total (max=37)`) %>%
   filter(Region=="distal") %>%
-  mutate(Rat_ID=paste0("R",Rat_ID))
+  mutate(Rat_ID=paste0("R",Rat_ID)) -> histo 
 
 ```
 
@@ -1131,7 +1132,7 @@ mutate(DSSpress = fct_recode(Time,
 
 
 
-```{r, fig.height=10, fig.width=10}
+```{r, eval=FALSE, fig.height=10, fig.width=10, include=FALSE}
 
 
 hysteresis_profile_plot =
@@ -1241,7 +1242,7 @@ plot_grid(pertubation_pulse_plot,
 
 
 
-```{r, fig.height=10, fig.width=10}
+```{r, fig.height=10, fig.width=10, message=FALSE, warning=FALSE}
 
 
 pertubation_press_plot =
@@ -1291,7 +1292,8 @@ akk_df %>%
   select(hysteresis_grp,Study_group, Rat_ID) %>% 
   unique %>%
   merge(.,histo, by="Rat_ID") %>%
-  mutate(DSS_group = ifelse(Study_group == "G5" | Study_group == "G6" | Study_group == "G7", "high", "low" )) %>%
+  mutate(DSS_group = ifelse(Study_group == "G6" | Study_group == "G7", "high", "low" )) %>%
+  mutate(score_histo = as.numeric(as.character(score_histo))) %>%
   group_by(hysteresis_grp,DSS_group) %>%
   summarise(n = n(), m = mean(score_histo), sem = sd(score_histo)/sqrt(n())) %>%
   ungroup() %>%
@@ -1325,7 +1327,7 @@ plot_grid(pertubation_press_plot,
 
 ### microbial interaction with akkermansia
 
-```{r, fig.width=15}
+```{r, fig.width=15, message=FALSE, warning=FALSE}
 
 
 mapping_file %>% 
