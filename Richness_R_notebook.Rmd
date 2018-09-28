@@ -18,7 +18,7 @@ Our aim is to develop a robust model that can link microbial diversity and low g
 
 ## Study design
 
-![here is the study design](study_design.png)
+![here is the study design](Figure1_study_design.png)
 
 Color code to use:
 
@@ -111,8 +111,31 @@ mapping_file[ mapping_file$X.SampleID == apply(otu[-dim(otu)[2]],2,sum)  %>% whi
 mapping_file %>% filter(Time=="Tm49") %>% 
   merge(., rat_metadata, by.x="Rat_ID", by.y="Animal_id_2") %>% 
   merge(., t(genus[row.names(genus) %>% grep("Bacteroides",.),]) , by.x="X.SampleID", by.y="row.names") %>% 
-  ggplot(aes(x=Bacteroides, y=`D_0__Bacteria;D_1__Bacteroidetes;D_2__Bacteroidia;D_3__Bacteroidales;D_4__Bacteroidaceae;D_5__Bacteroides`)) + geom_point() +  geom_smooth(method = "lm") + ylab("Bacteroides MiSeq") + xlab("Bacteroides qPCR") + scale_y_log10() + scale_x_log10() 
+  merge(., t(genus[row.names(genus) %>% grep("Prevotella",.),]) , by.x="X.SampleID", by.y="row.names") %>%
+  ggplot(aes(x=Bacteroides, y=`D_0__Bacteria;D_1__Bacteroidetes;D_2__Bacteroidia;D_3__Bacteroidales;D_4__Bacteroidaceae;D_5__Bacteroides`+`D_0__Bacteria;D_1__Bacteroidetes;D_2__Bacteroidia;D_3__Bacteroidales;D_4__Prevotellaceae;D_5__Prevotella`)) + geom_point() +  geom_smooth(method = "lm") + ylab("Prevotella + Bacteroides MiSeq") + xlab("Bacteroides-Prevotella qPCR") + scale_y_log10() + scale_x_log10() 
 
+mapping_file %>% filter(Time=="Tm49") %>% 
+  merge(., rat_metadata, by.x="Rat_ID", by.y="Animal_id_2") %>% 
+  merge(., t(genus[row.names(genus) %>% grep("Bacteroides",.),]) , by.x="X.SampleID", by.y="row.names") %>% 
+  merge(., t(genus[row.names(genus) %>% grep("Prevotella",.),]) , by.x="X.SampleID", by.y="row.names") %>%
+  mutate(miseq = 
+           `D_0__Bacteria;D_1__Bacteroidetes;D_2__Bacteroidia;D_3__Bacteroidales;D_4__Bacteroidaceae;D_5__Bacteroides`+`D_0__Bacteria;D_1__Bacteroidetes;D_2__Bacteroidia;D_3__Bacteroidales;D_4__Prevotellaceae;D_5__Prevotella`) %>% 
+  with(., cor.test(Bacteroides,miseq, method="spearman"))
+
+
+mapping_file %>% filter(Time=="Tm49") %>% 
+  merge(., rat_metadata, by.x="Rat_ID", by.y="Animal_id_2") %>% 
+  merge(., t(genus[row.names(genus) %>% grep("Bacteroides",.),]) , by.x="X.SampleID", by.y="row.names") %>% 
+  merge(., t(genus[row.names(genus) %>% grep("Prevotella",.),]) , by.x="X.SampleID", by.y="row.names") %>% 
+  .$`D_0__Bacteria;D_1__Bacteroidetes;D_2__Bacteroidia;D_3__Bacteroidales;D_4__Prevotellaceae;D_5__Prevotella`
+
+
+
+mapping_file %>% filter(Time=="Tm49") %>% 
+  merge(., rat_metadata, by.x="Rat_ID", by.y="Animal_id_2") %>% 
+  merge(., t(genus[row.names(genus) %>% grep("Bacteroides",.),]) , by.x="X.SampleID", by.y="row.names") %>% 
+  merge(., t(genus[row.names(genus) %>% grep("Prevotella",.),]) , by.x="X.SampleID", by.y="row.names") %>% 
+  .$`D_0__Bacteria;D_1__Bacteroidetes;D_2__Bacteroidia;D_3__Bacteroidales;D_4__Bacteroidaceae;D_5__Bacteroides`
 
 
 ```
