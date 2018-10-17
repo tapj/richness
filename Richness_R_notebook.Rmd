@@ -112,7 +112,7 @@ mapping_file %>% filter(Time=="Tm49") %>%
   merge(., rat_metadata, by.x="Rat_ID", by.y="Animal_id_2") %>% 
   merge(., t(genus[row.names(genus) %>% grep("Bacteroides",.),]) , by.x="X.SampleID", by.y="row.names") %>% 
   merge(., t(genus[row.names(genus) %>% grep("Prevotella",.),]) , by.x="X.SampleID", by.y="row.names") %>%
-  ggplot(aes(x=Bacteroides, y=`D_0__Bacteria;D_1__Bacteroidetes;D_2__Bacteroidia;D_3__Bacteroidales;D_4__Bacteroidaceae;D_5__Bacteroides`+`D_0__Bacteria;D_1__Bacteroidetes;D_2__Bacteroidia;D_3__Bacteroidales;D_4__Prevotellaceae;D_5__Prevotella`)) + geom_point() +  geom_smooth(method = "lm") + ylab("Prevotella + Bacteroides MiSeq") + xlab("Bacteroides-Prevotella qPCR") + scale_y_log10() + scale_x_log10() 
+  ggplot(aes(x=Bacteroides, y=`D_0__Bacteria;D_1__Bacteroidetes;D_2__Bacteroidia;D_3__Bacteroidales;D_4__Bacteroidaceae;D_5__Bacteroides`+`D_0__Bacteria;D_1__Bacteroidetes;D_2__Bacteroidia;D_3__Bacteroidales;D_4__Prevotellaceae;D_5__Prevotella`)) + geom_point() +  geom_smooth(method = "lm", se=FALSE) + ylab("Prevotella + Bacteroides\n(MiSeq)") + xlab("Bacteroides + Prevotella\n(qPCR)") + scale_y_log10(limits=c(0.01,1),labels = scales::percent) + scale_x_log10(limits=c(0.01,1),labels = scales::percent) 
 
 mapping_file %>% filter(Time=="Tm49") %>% 
   merge(., rat_metadata, by.x="Rat_ID", by.y="Animal_id_2") %>% 
@@ -1370,7 +1370,7 @@ mapping_file %>%
   
   select(-X.SampleID, -BarcodeSequence, -LinkerPrimerSequence, -samplenr, -INRA_DNA_ID, -DNAextractionOperator, -Time_DSS, -Description, -Animal_id, -Weight, -Bacteroides, -Filiation, -Cage_provider, -Animal.Identification ) %>%
   filter(Diet != "AIN93G", Time > -10) %>%
-  filter(DSS == "2" | DSS == "3") %>%
+  filter(DSS == "1" | DSS == "2" | DSS == "3") %>%
   arrange(Study_group, Rat_ID,Time) %>%
   melt(id.vars=c("Rat_ID","Time","DSS","Diet","Study_group","hysteresis_grp","D_0__Bacteria;D_1__Verrucomicrobia;D_2__Verrucomicrobiae;D_3__Verrucomicrobiales;D_4__Verrucomicrobiaceae;D_5__Akkermansia")) %>%
   rename(Akkermansia = `D_0__Bacteria;D_1__Verrucomicrobia;D_2__Verrucomicrobiae;D_3__Verrucomicrobiales;D_4__Verrucomicrobiaceae;D_5__Akkermansia`) %>%
@@ -1384,7 +1384,7 @@ mapping_file %>%
 akk_cor%>%
   group_by(hysteresis_grp,variable) %>%
   summarise(n=n(), median=median(akk_cor), q25=quantile(akk_cor,0.25), q75 = quantile(akk_cor,0.75) ) %>%
-  filter(abs(median) > 0.4) %>%
+  filter(abs(median) > 0.25) %>%
   merge(.,akk_cor, by=c("hysteresis_grp","variable"), all.x=TRUE) %>%
   tidyr::separate(variable,into=c("Domain","Phylum","Class","Order","Family","Genus"),sep=";") %>%
   filter(Genus != "Other", Family != "D_5__uncultured") %>%
@@ -1405,6 +1405,96 @@ akk_cor%>%
 ```
 
 
+
+```{r}
+
+
+akk_cor%>%
+  group_by(hysteresis_grp,variable) %>%
+  summarise(n=n(), median=median(akk_cor), q25=quantile(akk_cor,0.25), q75 = quantile(akk_cor,0.75) ) %>%
+  filter(abs(median) > 0.25) %>%
+  merge(.,akk_cor, by=c("hysteresis_grp","variable"), all.x=TRUE) %>%
+  tidyr::separate(variable,into=c("Domain","Phylum","Class","Order","Family","Genus"),sep=";") %>%
+  filter(Genus != "Other", Family != "D_5__uncultured") %>%
+  ungroup()
+
+akk_cor%>%
+  group_by(hysteresis_grp,variable) %>%
+  summarise(n=n(), median=median(akk_cor), q25=quantile(akk_cor,0.25), q75 = quantile(akk_cor,0.75) ) %>%
+  filter(abs(median) > 0.25) %>%
+   tidyr::separate(variable,into=c("Domain","Phylum","Class","Order","Family","Genus"),sep=";") %>%
+  filter(Genus != "Other", Family != "D_5__uncultured") 
+
+#%>%
+#  ggraph() + geom_edge
+
+
+
+
+
+```
+
+
+
+
+
+### microbial interaction with Bacteroides
+
+
+```{r fig.width=15}
+
+
+mapping_file %>% 
+  merge(
+    ., 
+    rat_metadata, 
+    by.x="Rat_ID", 
+    by.y="Animal_id_2"
+    ) %>% 
+  merge(.,hysteresis, by = "Rat_ID", all.x=TRUE) %>%
+  merge(., 
+        genus %>% noise.removal(percent=1) %>% t, 
+        by.x="X.SampleID", 
+        by.y="row.names") %>%
+  mutate(Time=fct_relevel(Time, c("Tm49","Tm41","Tm34","Tm20","Tm13","Tm7","Tm1","T3","T13","T17","T27","T31","T40","T47","T63","T68"))) %>% 
+  mutate(Time=Time %>% gsub("T","",.) %>% gsub("m","-",.) %>% as.character %>% as.numeric) %>%
+  
+  select(-X.SampleID, -BarcodeSequence, -LinkerPrimerSequence, -samplenr, -INRA_DNA_ID, -DNAextractionOperator, -Time_DSS, -Description, -Animal_id, -Weight, -Bacteroides, -Filiation, -Cage_provider, -Animal.Identification ) %>%
+  filter(Diet != "AIN93G", Time > -10) %>%
+  filter(DSS == "1" | DSS == "2" | DSS == "3") %>%
+  arrange(Study_group, Rat_ID,Time) %>%
+  melt(id.vars=c("Rat_ID","Time","DSS","Diet","Study_group","hysteresis_grp","D_0__Bacteria;D_1__Bacteroidetes;D_2__Bacteroidia;D_3__Bacteroidales;D_4__Bacteroidaceae;D_5__Bacteroides")) %>%
+  rename(Bacteroides = `D_0__Bacteria;D_1__Bacteroidetes;D_2__Bacteroidia;D_3__Bacteroidales;D_4__Bacteroidaceae;D_5__Bacteroides`) %>%
+  group_by(Rat_ID,variable,hysteresis_grp) %>%
+  summarise(bacteroides_cor=cor(Bacteroides,value, method="spearman")) %>%
+  mutate(bacteroides_cor = ifelse(is.na(bacteroides_cor),0,bacteroides_cor)) %>%
+  ungroup() -> bacteroides_cor
+
+
+
+bacteroides_cor%>%
+  group_by(hysteresis_grp,variable) %>%
+  summarise(n=n(), median=median(bacteroides_cor), q25=quantile(bacteroides_cor,0.25), q75 = quantile(bacteroides_cor,0.75) ) %>%
+  filter(abs(median) > 0.1) %>%
+  merge(.,bacteroides_cor, by=c("hysteresis_grp","variable"), all.x=TRUE) %>%
+  tidyr::separate(variable,into=c("Domain","Phylum","Class","Order","Family","Genus"),sep=";") %>%
+  filter(Genus != "Other", Family != "D_5__uncultured") %>%
+  ungroup() %>%
+  ggplot() + geom_boxplot(aes(x=paste(Family,Genus),y=bacteroides_cor, fill=median)) + facet_wrap(~hysteresis_grp) +
+  coord_flip() +
+  scale_fill_continuous(low = "#FF0000", high="#00FF00") +
+  ylab("Genus correlation over time with\nBacteroides rel. abundance") + xlab("")
+
+
+
+
+
+
+#genus
+
+
+
+```
 
 
 
