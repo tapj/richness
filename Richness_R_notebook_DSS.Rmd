@@ -226,6 +226,24 @@ mapping_file %>%
   
   pA_akk
 
+mapping_file %>%
+  merge(.,rat_metadata,by.x="Rat_ID",by.y="Animal_id_2") %>%
+  select(Rat_ID,samplenr,Time,DSS,Study_group) %>%
+  filter(Study_group != "G1") %>%
+  mutate(Time_days = Time %>% gsub("Tm","-", .) %>% gsub("T","",.) %>% as.character %>% as.numeric) %>% filter(Time_days >= -8) %>% 
+  filter(Time != "T47") %>%
+  merge(.,genus_pco$li, by.x="samplenr", by.y="row.names") %>%
+  merge(.,t(genus[, select_DSS_samples %>% as.character]), by.x="samplenr", by.y="row.names") %>%
+  mutate(DSS = Study_group %>% forcats::fct_recode(`0` = "G2",`0.25` = "G3",`0.5` = "G4",`1` = "G5",`2` = "G6",`3` = "G7") %>% as.character %>% as.numeric ) %>%
+  select(contains("Akkermansia"),contains("S24-7"),DSS,Time_days, Rat_ID,A1,A2,A3) %>%
+  mutate(DSS_group = ifelse(DSS>=1,"High dose","Low dose")) %>%
+  mutate(Pertubation = ifelse(Time_days>=31,"DSS pulse","washout")) %>%
+  rename_at(1, ~"Akkermansia") %>%
+  rename_at(2, ~"S24_7") %>%
+  ggplot() + geom_point(aes(x=A1,y=(Akkermansia+10^-6))) + #theme_dark() + 
+  xlab("PCo1 (JSD based)") + ylab("Akkermansia\nrel. abund.") + scale_y_continuous(labels=scales::percent)
+
+
 
 
 ```
@@ -326,13 +344,13 @@ for(i in 1:5) {
 #best_genus <- fit_genus_DSS_list[[1]][[6]] # ideal one
 
 
-bic_results=melt(data.frame(sapply(fit_genus_DSS_list[1:5], sapply, BIC), nb.clust=1:15), id.vars="nb.clust")
+#bic_results=melt(data.frame(sapply(fit_genus_DSS_list[1:5], sapply, BIC), nb.clust=1:15), id.vars="nb.clust")
 laplace_results=melt(data.frame(sapply(fit_genus_DSS_list[1:5], sapply, laplace), nb.clust=1:15), id.vars="nb.clust")
 
-p1_bic = ggplot(bic_results) + geom_line(aes(x=nb.clust, y=value, group=variable)) + ylab("BIC") + xlab("Number of clusters")
+#p1_bic = ggplot(bic_results) + geom_line(aes(x=nb.clust, y=value, group=variable)) + ylab("BIC") + xlab("Number of clusters")
 p2_laplace = ggplot(laplace_results) + geom_line(aes(x=nb.clust, y=value, group=variable)) + ylab("Laplace") + xlab("Number of clusters")
 
-p1_bic + theme_bw() 
+#p1_bic + theme_bw() 
 p2_laplace + theme_bw() # to complete this task but K = 5
 
 par(mar=c(1,1,1,10))
@@ -543,6 +561,69 @@ mapping_file %>%
 
 
 ```
+
+## akkermansia over time clustering
+
+
+```{r}
+
+mapping_file %>%
+  merge(.,rat_metadata,by.x="Rat_ID",by.y="Animal_id_2") %>%
+  select(Rat_ID,samplenr,Time,DSS,Study_group) %>%
+  filter(Study_group != "G1") %>%
+  mutate(Time_days = Time %>% gsub("Tm","-", .) %>% gsub("T","",.) %>% as.character %>% as.numeric) %>% filter(Time_days >= -1) %>% 
+  filter(Time != "T47") %>%
+  mutate(DSS = Study_group %>% forcats::fct_recode(`0` = "G2",`0.25` = "G3",`0.5` = "G4",`1` = "G5",`2` = "G6",`3` = "G7") %>% as.character %>% as.numeric ) %>%
+  merge(.,t(genus[, select_DSS_samples %>% as.character]), by.x="samplenr", by.y="row.names") %>%
+  select(contains("Akkermansia"),DSS,Time_days, Rat_ID) %>%
+  mutate(DSS_group = ifelse(DSS>=1,"High dose","No or Low dose")) %>%
+  #filter(DSS ==0) %>%
+  rename_at(1, ~"Akkermansia") %>%
+  filter(DSS_group=="High dose") %>%
+  select(Akkermansia,Time_days,Rat_ID) %>%
+  reshape2::dcast(Rat_ID~Time_days, value.var = "Akkermansia", fill=0) %>%
+  tibble::column_to_rownames("Rat_ID") %>%
+  kmeans(.,3) %>%
+  .$cluster %>%
+  as.matrix %>%
+  as.data.frame %>%
+  rename(cluster=V1) -> rat_cluster
+
+hysteresis = read.csv2("hysteresis.csv") %>% 
+  mutate(hysteresis_grp = fct_recode(hysteresis_grp, `resistant\nprofile` = "high",
+                                                      `resilient\nprofile` = "intermediate",                          
+                                                      `no resilient\nprofile` = "low"))
+
+mapping_file %>%
+  merge(.,rat_metadata,by.x="Rat_ID",by.y="Animal_id_2") %>%
+  select(Rat_ID,samplenr,Time,DSS,Study_group) %>%
+  filter(Study_group != "G1") %>%
+  mutate(Time_days = Time %>% gsub("Tm","-", .) %>% gsub("T","",.) %>% as.character %>% as.numeric) %>% filter(Time_days >= -1) %>% 
+  filter(Time != "T47") %>%
+  mutate(DSS = Study_group %>% forcats::fct_recode(`0` = "G2",`0.25` = "G3",`0.5` = "G4",`1` = "G5",`2` = "G6",`3` = "G7") %>% as.character %>% as.numeric ) %>%
+  merge(.,t(genus[, select_DSS_samples %>% as.character]), by.x="samplenr", by.y="row.names") %>%
+  select(contains("Akkermansia"),DSS,Time_days, Rat_ID) %>%
+  mutate(DSS_group = ifelse(DSS>=1,"High dose","No or Low dose")) %>%
+  #filter(DSS ==0) %>%
+  rename_at(1, ~"Akkermansia") %>%
+  filter(DSS_group=="High dose") %>%
+  select(Akkermansia,Time_days,Rat_ID) %>%
+  merge(.,rat_cluster,by.x="Rat_ID",by.y="row.names") %>%
+  merge(.,hysteresis,by="Rat_ID") %>%
+  ggplot() + 
+  geom_line(aes(x=Time_days,y=Akkermansia + 10^-6, group=Rat_ID), linetype=3) + 
+  geom_point(aes(x=Time_days,y=Akkermansia + 10^-6,  col=hysteresis_grp %>% as.character)) +
+  scale_y_log10() + facet_wrap(~hysteresis_grp) + 
+  geom_smooth(aes(x=Time_days,y=Akkermansia + 10^-6, col=hysteresis_grp %>% as.character)) + guides(col=FALSE) +
+  geom_vline(xintercept = 32) + geom_hline(yintercept = 0.009129289) + ylab("Akkermansia")
+
+
+
+
+```
+
+
+
 
 
 # figure stability potential
@@ -942,6 +1023,154 @@ plot_grid(resilience_plot,plot_grid(g1,histo_DSS_hysteresis_barplot,nrow=1,rel_w
 ggsave("Figure_Akk_hysteresis_host.pdf")
 
 ```
+
+
+
+## Akkermansia network analysis
+
+
+
+### microbial interaction with akkermansia
+
+```{r, fig.width=15, message=FALSE, warning=FALSE}
+
+
+mapping_file %>% 
+  merge(
+    ., 
+    rat_metadata, 
+    by.x="Rat_ID", 
+    by.y="Animal_id_2"
+    ) %>% 
+  merge(.,hysteresis, by = "Rat_ID", all.x=TRUE) %>%
+  merge(., 
+        genus %>% noise.removal(percent=1) %>% t, 
+        by.x="X.SampleID", 
+        by.y="row.names") %>%
+  mutate(Time=fct_relevel(Time, c("Tm49","Tm41","Tm34","Tm20","Tm13","Tm7","Tm1","T3","T13","T17","T27","T31","T40","T47","T63","T68"))) %>% 
+  mutate(Time=Time %>% gsub("T","",.) %>% gsub("m","-",.) %>% as.character %>% as.numeric) %>%
+  
+  select(-X.SampleID, -BarcodeSequence, -LinkerPrimerSequence, -samplenr, -INRA_DNA_ID, -DNAextractionOperator, -Time_DSS, -Description, -Animal_id, -Weight, -Bacteroides, -Filiation, -Cage_provider, -Animal.Identification ) %>%
+  filter(Diet != "AIN93G", Time > -10) %>%
+  filter(DSS == "1" | DSS == "2" | DSS == "3") %>%
+  arrange(Study_group, Rat_ID,Time) %>%
+  melt(id.vars=c("Rat_ID","Time","DSS","Diet","Study_group","hysteresis_grp","D_0__Bacteria;D_1__Verrucomicrobia;D_2__Verrucomicrobiae;D_3__Verrucomicrobiales;D_4__Verrucomicrobiaceae;D_5__Akkermansia")) %>%
+  rename(Akkermansia = `D_0__Bacteria;D_1__Verrucomicrobia;D_2__Verrucomicrobiae;D_3__Verrucomicrobiales;D_4__Verrucomicrobiaceae;D_5__Akkermansia`) %>%
+  group_by(Rat_ID,variable,hysteresis_grp) %>%
+  summarise(akk_cor=cor(Akkermansia,value, method="spearman")) %>%
+  mutate(akk_cor = ifelse(is.na(akk_cor),0,akk_cor)) %>%
+  ungroup() -> akk_cor
+
+
+
+akk_cor%>%
+  group_by(hysteresis_grp,variable) %>%
+  summarise(n=n(), median=median(akk_cor), q25=quantile(akk_cor,0.25), q75 = quantile(akk_cor,0.75) ) %>%
+  mutate(direction = ifelse(median>0,"pos","neg")) %>%
+  filter((direction == "pos" & q25 > 0)|(direction == "neg" & q75 < 0)) %>%
+  #filter(abs(median) > 0.25) %>%
+  merge(.,akk_cor, by=c("hysteresis_grp","variable"), all.x=TRUE) %>%
+  tidyr::separate(variable,into=c("Domain","Phylum","Class","Order","Family","Genus"),sep=";") %>%
+  filter(Genus != "Other", Family != "D_5__uncultured") %>%
+  ungroup() %>%
+  ggplot() + geom_boxplot(aes(x=paste(Family,Genus),y=akk_cor, fill=median)) + facet_wrap(~hysteresis_grp) +
+  coord_flip() +
+  scale_fill_continuous(low = "#FF0000", high="#00FF00") +
+  ylab("Genus correlation over time with\nAkkermansia rel. abundance") + xlab("")
+
+
+
+
+akk_cor%>%
+  group_by(hysteresis_grp,variable) %>%
+  summarise(n=n(), median=median(akk_cor), q25=quantile(akk_cor,0.25), q75 = quantile(akk_cor,0.75) )
+
+
+
+
+```
+
+
+
+```{r, fig.height=6, fig.width=20}
+
+library(ggraph)
+library(igraph)
+library(tidygraph)
+
+akk_cor%>%
+  group_by(hysteresis_grp,variable) %>%
+  summarise(n=n(), median=median(akk_cor), q25=quantile(akk_cor,0.25), q75 = quantile(akk_cor,0.75) ) %>%
+  filter(abs(median) > 0.25) %>%
+  merge(.,akk_cor, by=c("hysteresis_grp","variable"), all.x=TRUE) %>%
+  tidyr::separate(variable,into=c("Domain","Phylum","Class","Order","Family","Genus"),sep=";") %>%
+  filter(Genus != "Other", Family != "D_5__uncultured") %>%
+  ungroup()
+
+my_lab <- function(labels) {
+  list(hysteresis_grp = c("resistant\nprofile","resilient\nprofile","no resilient\nprofile"))
+}
+
+akk_cor%>%
+  group_by(hysteresis_grp,variable) %>%
+  summarise(n=n(), median=median(akk_cor), q25=quantile(akk_cor,0.25), q75 = quantile(akk_cor,0.75) ) %>%
+  mutate(direction = ifelse(median>0,"pos","neg")) %>%
+  filter((direction == "pos" & q25 > 0)|(direction == "neg" & q75 < 0)) %>%
+  #filter(abs(median) > 0.25) %>%
+   tidyr::separate(variable,into=c("Domain","Phylum","Class","Order","Family","Genus"),sep=";") %>%
+  filter(Genus != "Other", Family != "D_5__uncultured") %>%
+  mutate(Akkermansia="Akkermansia") %>%
+  select(Akkermansia,Genus,hysteresis_grp,median) %>%
+  ungroup() %>%
+  #mutate(hysteresis_grp = hysteresis_grp %>% factor(levels=c("resistant\nprofile","resilient\nprofile","no resilient\nprofile"))) %>%
+  mutate(Genus = Genus %>% gsub("D_5__","",.)) %>%
+  igraph::graph_from_data_frame() %>%
+  ggraph(., layout = 'kk') + 
+    geom_edge_link(aes(colour = median), width=2, alpha=0.7) + 
+  facet_edges(~hysteresis_grp , nrow=1, labeller = my_lab) +   
+  geom_node_text(aes(label = name)) +
+  scale_edge_colour_gradient2(low = "red", mid="yellow", high="green") +
+  theme_dark()
+  
+
+#%>%
+#  ggraph() + geom_edge
+
+
+akk_cor%>%
+  group_by(hysteresis_grp,variable) %>%
+  summarise(n=n(), median=median(akk_cor), q25=quantile(akk_cor,0.25), q75 = quantile(akk_cor,0.75) ) %>%
+  mutate(direction = ifelse(median>0,"pos","neg")) %>%
+  filter((direction == "pos" & q25 > 0)|(direction == "neg" & q75 < 0)) %>%
+  #filter(abs(median) > 0.25) %>%
+   tidyr::separate(variable,into=c("Domain","Phylum","Class","Order","Family","Genus"),sep=";") %>%
+  filter(Genus != "Other", Family != "D_5__uncultured") %>%
+  mutate(Akkermansia="Akkermansia") %>%
+  select(Akkermansia,Genus,hysteresis_grp,median) %>%
+  ungroup() %>%
+  #mutate(hysteresis_grp = hysteresis_grp %>% factor(levels=c("resistant\nprofile","resilient\nprofile","no resilient\nprofile"))) %>%
+  mutate(Genus = Genus %>% gsub("D_5__","",.)) %>%
+  igraph::graph_from_data_frame() -> akk_net
+
+edge.attributes(akk_net)$hysteresis_grp = edge.attributes(akk_net)$hysteresis_grp %>% factor(levels=c("resistant\nprofile","resilient\nprofile","no resilient\nprofile"))
+
+
+akk_net %>%
+ggraph(., layout = 'kk') + 
+    geom_edge_link(aes(colour = median), width=2, alpha=0.7) + 
+  facet_edges(~hysteresis_grp , nrow=1, labeller = my_lab) +   
+  geom_node_text(aes(label = name)) +
+  scale_edge_colour_gradient2(low = "red", mid="yellow", high="green") +
+  theme_dark()
+
+
+
+```
+
+
+
+
+
 
 
 
