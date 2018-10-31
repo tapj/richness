@@ -1,0 +1,1161 @@
+---
+title: "Richness R Notebook : DSS press perturbation"
+output:
+  html_notebook: 
+    highlight: tango
+    author: Julien Tap
+    mathjax: null
+    theme: cerulean
+    toc: yes
+    toc_float: yes
+    code_folding: hide
+  html_document: default
+---
+
+
+
+```{r}
+
+Grp_color = c("#dfc27d","#a6bddb","#74a9cf","#3690c0","#0570b0","#045a8d","#023858")
+
+
+```
+
+
+
+
+
+## Loading 16S sequencing data and associated metadata
+
+here we start to load all R libraries and custom script (code not shown) with study data
+
+```{r loading_library2, message=FALSE, warning=FALSE, include=FALSE}
+
+Sys.setenv(PATH = paste("C:/Users/tapju/Documents/ImageMagick", Sys.getenv("PATH"), sep = ";"))
+library(BiotypeR)
+library(DirichletMultinomial)
+library(ggplot2)
+library(reshape2)
+library(ade4)
+library(vegan)
+library(dplyr)
+library(magrittr)
+library(forcats)
+library(GGally)
+source("https://raw.githubusercontent.com/tapj/IBSMicrobiota/master/R/mclapply.hack.R")
+library(stringr)
+library(broom)
+
+library(earlywarnings)
+library(gganimate)
+library(cowplot)
+library(microbiome)
+library(viridis)
+source("PlotPotential2.r")
+
+```
+
+```{r}
+
+rat_metadata = read.csv2("rat_metadata.csv")
+#mapping_file = read.table("qiime/result/Mapping_Richness1.txt", header=T, comment.char ="", dec=".", sep="\t")
+
+mapping_file = read.table("qiime/result/mapping_all_richness.txt", header=T, comment.char ="", dec=".", sep="\t")
+
+#rat_metadata$Animal_id_2 %<>% gsub("R","",.)
+
+genus = read.table("qiime/result/otus/summarize_taxa_through_plots_out/otu_table_non_chimeric_L6.txt", header=T, comment.char ="", dec=".", sep="\t", skip=1, row.names = 1, check.names = FALSE)
+
+otu   = read.table("qiime/result/otus/make_otu_table_out/otu_table_non_chimeric.tab",header=T, comment.char ="", dec=".", sep="\t", skip=1, row.names = 1, check.names = FALSE )
+
+colnames(mapping_file)[7] = "Time"
+
+
+mapping_file
+
+```
+
+
+
+
+
+## select sample of interest
+
+
+```{r}
+
+
+
+
+mapping_file %>%
+  merge(.,rat_metadata,by.x="Rat_ID",by.y="Animal_id_2") %>%
+  select(Rat_ID,samplenr,Time,DSS,Study_group) %>%
+  filter(Study_group != "G1") %>%
+  mutate(Time_days = Time %>% gsub("Tm","-", .) %>% gsub("T","",.) %>% as.character %>% as.numeric) %>% filter(Time_days >= -8) %>% 
+  filter(Time != "T47") %>%
+  pull(samplenr) -> select_DSS_samples
+  
+
+
+
+
+```
+
+
+## alpha-diversity
+
+
+```{r}
+observed_otu = otu[,-dim(otu)[2]] %>% t %>% vegan::rarefy(.,sample=25000)
+
+
+observed_otu %<>% as.matrix %>% as.data.frame %>% rename(S_obs = V1 )
+
+mapping_file %>%
+  merge(.,rat_metadata,by.x="Rat_ID",by.y="Animal_id_2") %>%
+  select(Rat_ID,samplenr,Time,DSS,Study_group) %>%
+  filter(Study_group != "G1") %>%
+  mutate(Time_days = Time %>% gsub("Tm","-", .) %>% gsub("T","",.) %>% as.character %>% as.numeric) %>% filter(Time_days >= -1) %>% 
+  filter(Time != "T47") %>%
+  merge(.,observed_otu, by.x="samplenr", by.y="row.names", all = FALSE) %>%
+  as_tibble %>%
+  mutate(Time = Time %>% as.character) %>%
+  mutate(DSS = Study_group %>% forcats::fct_recode(`0` = "G2",`0.25` = "G3",`0.5` = "G4",`1` = "G5",`2` = "G6",`3` = "G7") %>% as.character %>% as.numeric ) %>%
+  mutate(DSS_group = ifelse(DSS>=1,"High dose","No or Low dose")) %>%
+   #xtabs(~Time+Study_group, data = .) %>%
+  ggplot() + 
+  #geom_line(aes(x=DSS,y=S_obs, group=Rat_ID), linetype=2) +
+  geom_point(aes(x=DSS,y=S_obs), size=1, alpha=0.5) +
+  xlab("DSS") + ylab("Observed OTU\nafter reads rarefaction") +
+  facet_wrap(~Time_days)
+
+
+```
+
+```{r, fig.height=4, fig.width=10}
+
+mapping_file %>%
+  merge(.,rat_metadata,by.x="Rat_ID",by.y="Animal_id_2") %>%
+  select(Rat_ID,samplenr,Time,DSS,Study_group) %>%
+  filter(Study_group != "G1") %>%
+  mutate(Time_days = Time %>% gsub("Tm","-", .) %>% gsub("T","",.) %>% as.character %>% as.numeric) %>% filter(Time_days >= -8) %>% 
+  filter(Time != "T47") %>%
+  merge(.,observed_otu, by.x="samplenr", by.y="row.names", all = FALSE) %>%
+  as_tibble %>%
+  mutate(Time = Time %>% as.character) %>%
+  mutate(DSS = Study_group %>% forcats::fct_recode(`0` = "G2",`0.25` = "G3",`0.5` = "G4",`1` = "G5",`2` = "G6",`3` = "G7") %>% as.character %>% as.numeric ) %>%
+  mutate(DSS_group = ifelse(DSS>1,"High dose","No or Low dose")) %>%
+  group_by(DSS_group,Time_days) %>%
+  summarise(`Standard deviation`=sd(S_obs),Average=median(S_obs)) %>%
+  melt(id.vars = c("DSS_group","Time_days")) %>%
+   #xtabs(~Time+Study_group, data = .) %>%
+  ggplot() + 
+  #geom_line(aes(x=DSS,y=S_obs, group=Rat_ID), linetype=2) +
+  geom_line(aes(x=Time_days,y=value, col=DSS_group), size=2, alpha=0.5, stat = "identity",linetype=1) +
+  geom_point(aes(x=Time_days,y=value, col=DSS_group), size=4) +
+  xlab("Time (days)") + ylab("Observed OTU\nstatistics") + facet_wrap(~variable, scale="free_y") -> pD_Sobs
+
+pD_Sobs
+
+```
+
+
+
+## beta-diversity
+
+
+```{r}
+
+
+genus_jsd = genus[, select_DSS_samples %>% as.character] %>%
+  dist.JSD()
+
+genus_pco = dudi.pco(genus_jsd, scannf=F, nf=3)
+
+```
+
+
+```{r, fig.height=8, fig.width=5}
+
+mapping_file %>%
+  merge(.,rat_metadata,by.x="Rat_ID",by.y="Animal_id_2") %>%
+  select(Rat_ID,samplenr,Time,DSS,Study_group) %>%
+  filter(Study_group != "G1") %>%
+  mutate(Time_days = Time %>% gsub("Tm","-", .) %>% gsub("T","",.) %>% as.character %>% as.numeric) %>% filter(Time_days >= -1) %>% 
+  filter(Time != "T47") %>%
+  merge(.,genus_pco$li, by.x="samplenr", by.y="row.names") %>%
+  ggplot() + geom_point(aes(x=A1,y=A2,col=Study_group)) + 
+  scale_color_brewer() +
+  facet_wrap(~Time_days, ncol=2) +
+  theme_dark()
+  
+  
+  
+  
+  
+
+
+
+
+
+```
+
+
+```{r}
+
+
+mapping_file %>%
+  merge(.,rat_metadata,by.x="Rat_ID",by.y="Animal_id_2") %>%
+  select(Rat_ID,samplenr,Time,DSS,Study_group) %>%
+  filter(Study_group != "G1") %>%
+  mutate(Time_days = Time %>% gsub("Tm","-", .) %>% gsub("T","",.) %>% as.character %>% as.numeric) %>% filter(Time_days >= -8) %>% 
+  filter(Time != "T47") %>%
+  merge(.,genus_pco$li, by.x="samplenr", by.y="row.names") %>%
+  merge(.,t(genus[, select_DSS_samples %>% as.character]), by.x="samplenr", by.y="row.names") %>%
+  mutate(DSS = Study_group %>% forcats::fct_recode(`0` = "G2",`0.25` = "G3",`0.5` = "G4",`1` = "G5",`2` = "G6",`3` = "G7") %>% as.character %>% as.numeric ) %>%
+  select(contains("Akkermansia"),contains("S24-7"),DSS,Time_days, Rat_ID,A1,A2,A3) %>%
+  mutate(DSS_group = ifelse(DSS>=1,"High dose","Low dose")) %>%
+  mutate(Pertubation = ifelse(Time_days>=31,"DSS pulse","washout")) %>%
+  rename_at(1, ~"Akkermansia") %>%
+  rename_at(2, ~"S24_7") %>%
+  ggplot() + geom_point(aes(x=A1,y=A2,col=log10(Akkermansia+10^-6))) + 
+  #scale_color_brewer() +
+  viridis::scale_color_viridis("Akkermansia",option = "B") +
+  #facet_grid(Pertubation~DSS_group) +
+  theme_dark() + xlab("PC1") + ylab("PC2") -> pA_akk
+  
+  pA_akk
+
+
+
+```
+
+
+
+
+```{r, fig.height=8, fig.width=5}
+
+
+mapping_file %>%
+  merge(.,rat_metadata,by.x="Rat_ID",by.y="Animal_id_2") %>%
+  select(Rat_ID,samplenr,Time,DSS,Study_group) %>%
+  filter(Study_group != "G1") %>%
+  mutate(Time_days = Time %>% gsub("Tm","-", .) %>% gsub("T","",.) %>% as.character %>% as.numeric) %>% filter(Time_days >= -8) %>% 
+  filter(Time != "T47") %>%
+  mutate(DSS = Study_group %>% forcats::fct_recode(`0` = "G2",`0.25` = "G3",`0.5` = "G4",`1` = "G5",`2` = "G6",`3` = "G7") %>% as.character %>% as.numeric ) %>%
+  merge(.,genus_pco$li, by.x="samplenr", by.y="row.names") %>%
+  ggplot() + geom_point(aes(x=DSS,y=A2)) + 
+  scale_color_brewer() +
+  facet_wrap(~Time_days, ncol=2) +
+  geom_smooth(aes(x=DSS+0.125,y=A2)) +
+  scale_x_continuous(trans="log2") +
+  theme_dark()
+
+
+
+
+```
+
+
+```{r}
+
+
+
+mapping_file %>%
+  merge(.,rat_metadata,by.x="Rat_ID",by.y="Animal_id_2") %>%
+  select(Rat_ID,samplenr,Time,DSS,Study_group) %>%
+  filter(Study_group != "G1") %>%
+  mutate(Time_days = Time %>% gsub("Tm","-", .) %>% gsub("T","",.) %>% as.character %>% as.numeric) %>% filter(Time_days >= -8) %>% 
+  filter(Time != "T47") %>%
+  mutate(DSS = Study_group %>% forcats::fct_recode(`0` = "G2",`0.25` = "G3",`0.5` = "G4",`1` = "G5",`2` = "G6",`3` = "G7") %>% as.character %>% as.numeric ) %>%
+  merge(.,genus_pco$li, by.x="samplenr", by.y="row.names") %>%
+  ggplot() + geom_point(aes(x=Time_days,y=A3)) + 
+  scale_color_brewer() +
+  facet_wrap(~DSS, ncol=2) +
+  #geom_smooth(aes(x=DSS+0.125,y=A2)) +
+  #scale_x_continuous(trans="log2") +
+  theme_dark()
+
+
+
+
+
+
+```
+
+
+
+
+```{r, message=FALSE, warning=FALSE}
+
+
+genus_stool.int.denoized =  round(noise.removal(genus[, select_DSS_samples %>% as.character], percent=1) * 30000)
+
+
+
+fit_genus_DSS_list = vector("list",5)
+
+if(!file.exists("fit_genus_DSS_list.rda")) { #check if fit_genus_list.rda exist
+#fit_genus <- mclapply(1:6, dmn, count=t(genus.count), verbose=TRUE)
+
+set.seed(444); seeds=sample(1:1000, 5)
+
+  for(i in 1:5) {
+    set.seed(seeds[i])
+    fit_genus <- mclapply(1:15, dmn, count=t(genus_stool.int.denoized), verbose=TRUE)
+    fit_genus_DSS_list[[i]] = fit_genus
+  }
+  #save(fit_genus, file=("../inst/extData/fit_genus.rda"))
+  save(fit_genus_list, file=("fit_genus_DSS_list.rda"))
+
+} else {load("fit_genus_DSS_list.rda")}
+
+
+
+
+
+lplc = vector("list",5)
+
+for(i in 1:5) {
+  lplc[[i]] <- sapply(fit_genus_DSS_list[[i]], function(x){attr(x,"goodnessOfFit")[["Laplace"]]})
+}
+
+(best_genus <- fit_genus_DSS_list[[5]][[which.min(lplc[[1]])]])
+#best_genus <- fit_genus_DSS_list[[1]][[11]] # true one
+
+#best_genus <- fit_genus_DSS_list[[1]][[6]] # ideal one
+
+
+bic_results=melt(data.frame(sapply(fit_genus_DSS_list[1:5], sapply, BIC), nb.clust=1:15), id.vars="nb.clust")
+laplace_results=melt(data.frame(sapply(fit_genus_DSS_list[1:5], sapply, laplace), nb.clust=1:15), id.vars="nb.clust")
+
+p1_bic = ggplot(bic_results) + geom_line(aes(x=nb.clust, y=value, group=variable)) + ylab("BIC") + xlab("Number of clusters")
+p2_laplace = ggplot(laplace_results) + geom_line(aes(x=nb.clust, y=value, group=variable)) + ylab("Laplace") + xlab("Number of clusters")
+
+p1_bic + theme_bw() 
+p2_laplace + theme_bw() # to complete this task but K = 5
+
+par(mar=c(1,1,1,10))
+DirichletMultinomial::heatmapdmn(fit1=fit_genus_DSS_list[[5]][[1]], fitN=best_genus, count=t(genus_stool.int.denoized))
+
+
+
+
+
+```
+
+
+
+```{r}
+
+
+
+genus_drivers = 
+rownames(genus_stool.int.denoized)[rev(head(order(  rowSums(abs(fitted(fit_genus[[9]], scale = TRUE) - as.vector(fitted(fit_genus[[1]], scale = TRUE))))  , decreasing = TRUE), 10))]
+
+
+
+ f = fitted(fit_genus[[9]], scale = TRUE) - as.vector(fitted(fit_genus[[1]], scale = TRUE))
+ 
+ f %>% 
+   abs %>%
+  apply(1,sum) %>%
+   as_tibble() %>%
+   tibble::rownames_to_column("genus") %>%
+    arrange(desc(value)) %>%
+  top_n(10) %>%
+   tidyr::separate(genus,into=c("Domain","Phylum","Class","Order","Family","Genus"),sep=";") %>%
+   ggplot() + geom_bar(aes(y=value, x=paste0("[",Family %>% gsub("D_4__","",.),"] ",Genus %>% gsub("D_5__","",.)) %>% reorder(.,value) ), stat="identity") +
+   coord_flip() + xlab("") + ylab("Genus DMM weights") -> pB_akk
+
+
+pB_akk
+
+
+```
+
+### bistability test
+
+Bistable genus analysis on Dominant Genera which contribute to the DMM models
+```{r}
+
+b = apply(
+  log10(genus[genus_drivers,select_DSS_samples %>% as.character]+10^-4), 1, function(x) 1-microbiome::bimodality(x,bs.iter = 100) 
+  ) %>% round(3) 
+
+data.frame(tax = b %>% names, p.values = b) %>% 
+  arrange(p.values) #%>%   filter(p.values <= 0.05)
+
+
+bistable_dominant_genera = 
+  data.frame(tax = b %>% names, p.values = b) %>% 
+  arrange(p.values) %>% 
+  filter(p.values < 0.05) %>%
+  .$tax %>% as.character
+
+tipping_point = 
+  apply(log10(genus[bistable_dominant_genera,]+10^-4), 1,   function(x) microbiome::potential_analysis(x,bs.iter = 100)$minima) %>%
+  lapply(.,function(x) 10^x ) %>% 
+  lapply(.,max) %>% 
+  as.data.frame(check.names=FALSE) %>% t %>% 
+  as.data.frame(check.names=FALSE) %>% set_colnames("Tip")
+
+merge(t(genus[bistable_dominant_genera,])+10^-4, mapping_file[,c("X.SampleID", "Time", "DSS")], by.x="row.names", by.y="X.SampleID") %>%
+  melt(.,id.vars=c("Row.names","Time", "DSS")) %>% 
+  merge(.,tipping_point, by.x="variable", by.y="row.names", all = TRUE ) %>%
+  filter(DSS == "3" | DSS == "2" | DSS == "1") %>%
+  ggplot() + 
+  geom_histogram(aes(x=value), fill="white", bins = 20) + geom_density(aes(x=value, y = ..count../6)) +
+  facet_wrap(~gsub(";","\n",gsub("D_","",variable)), scale="free") + 
+  scale_x_log10() + theme_dark() + 
+  geom_vline(aes(xintercept = Tip), col="red", size=2, alpha = 0.75) + scale_y_log10() #+ geom_density(aes(x=value))
+
+tipping_point 
+
+
+
+```
+
+
+
+```{r}
+
+
+library(ggridges)
+
+
+mapping_file %>%
+  merge(.,rat_metadata,by.x="Rat_ID",by.y="Animal_id_2") %>%
+  select(Rat_ID,samplenr,Time,DSS,Study_group) %>%
+  filter(Study_group != "G1") %>%
+  mutate(Time_days = Time %>% gsub("Tm","-", .) %>% gsub("T","",.) %>% as.character %>% as.numeric) %>% filter(Time_days >= -8) %>% 
+  filter(Time != "T47") %>%
+  mutate(DSS = Study_group %>% forcats::fct_recode(`0` = "G2",`0.25` = "G3",`0.5` = "G4",`1` = "G5",`2` = "G6",`3` = "G7") %>% as.character %>% as.numeric ) %>%
+  merge(.,t(genus[, select_DSS_samples %>% as.character]), by.x="samplenr", by.y="row.names") %>%
+  select(contains("Akkermansia"),contains("D_5__Ruminococcus"),contains("Phascolarctobacterium"),contains("D_4__Christensenellaceae;D_5__uncultured"),DSS,Time_days, Rat_ID) %>%
+  mutate(DSS_group = ifelse(DSS>=1,"High dose","No or Low dose")) %>%
+  #filter(DSS ==0) %>%
+  rename_at(1, ~"Akkermansia") %>%
+  rename_at(2, ~"Ruminococcus") %>%
+  rename_at(3, ~"Phascolarctobacterium") %>%
+  rename_at(4, ~"Christensenellaceae") %>%
+ggplot() + #geom_point(aes(x=Akkermansia,y=Time_days))
+  geom_density_ridges_gradient(aes(x=Akkermansia + 10^-6, y=reorder(Time_days %>% as.character,Time_days), fill=..x..)) + 
+  #geom_density(aes(x=Bifidobacterium + 10^-6, fill=cat_age_val)) +
+  
+  facet_wrap(~DSS_group, scales ="free_y", ncol=4) +
+  viridis::scale_fill_viridis(option = "B") +
+  geom_vline(xintercept = 0.009129289, col="red", size=1, alpha = 0.75, linetype=3) +
+  guides(fill=FALSE) +
+  xlab("Akkermansia") + ylab("stool sample prob over time") +
+  scale_x_log10() + theme_dark() -> pC_Akk
+
+
+pC_Akk
+
+
+```
+
+
+```{r, fig.height=8, fig.width=14}
+
+
+  plot_grid(pD_Sobs,pB_akk,pA_akk,pC_Akk, ncol=2,labels = c("A","B","C","D"), rel_heights = c(2,2))
+
+ggsave("Figure_early_warnings_signal.pdf")
+
+
+```
+
+
+# Akkermansia Time serie pairwise comparision
+
+```{r}
+
+
+mapping_file %>%
+  merge(.,rat_metadata,by.x="Rat_ID",by.y="Animal_id_2") %>%
+  select(Rat_ID,samplenr,Time,DSS,Study_group) %>%
+  filter(Study_group != "G1") %>%
+  mutate(Time_days = Time %>% gsub("Tm","-", .) %>% gsub("T","",.) %>% as.character %>% as.numeric) %>% filter(Time_days >= -1) %>% 
+  filter(Time != "T47") %>%
+  mutate(DSS = Study_group %>% forcats::fct_recode(`0` = "G2",`0.25` = "G3",`0.5` = "G4",`1` = "G5",`2` = "G6",`3` = "G7") %>% as.character %>% as.numeric ) %>%
+  merge(.,t(genus[, select_DSS_samples %>% as.character]), by.x="samplenr", by.y="row.names") %>%
+  select(contains("Akkermansia"),contains("D_5__Ruminococcus"),contains("Phascolarctobacterium"),contains("D_4__Christensenellaceae;D_5__uncultured"),DSS,Time_days, Rat_ID) %>%
+  mutate(DSS_group = ifelse(DSS>=1,"High dose","No or Low dose")) %>%
+  #filter(DSS ==0) %>%
+  rename_at(1, ~"Akkermansia") %>%
+  rename_at(2, ~"Ruminococcus") %>%
+  rename_at(3, ~"Phascolarctobacterium") %>%
+  rename_at(4, ~"Christensenellaceae") %>%
+  filter(DSS_group == "High dose") %>%
+  select(Akkermansia,Rat_ID,Time_days) %>%
+  #mutate(Akkermansia = log10(Akkermansia+10^-6)) %>%
+  dcast(Time_days~Rat_ID, value.var="Akkermansia", fill=NA) %>%
+  #.[c(1:9,7:9),] %>%
+  select(-Time_days) %>%
+  t %>%
+  fpc::pamk( metric="euclidean") -> akk_pamk
+  
+
+
+
+
+  akk_pamk$pamobject$clustering
+  
+
+  
+  
+
+
+
+```
+
+
+
+```{r, fig.height=4, fig.width=10}
+
+mapping_file %>%
+  merge(.,rat_metadata,by.x="Rat_ID",by.y="Animal_id_2") %>%
+  select(Rat_ID,samplenr,Time,DSS,Study_group) %>%
+  filter(Study_group != "G1") %>%
+  mutate(Time_days = Time %>% gsub("Tm","-", .) %>% gsub("T","",.) %>% as.character %>% as.numeric) %>% filter(Time_days >= -1) %>% 
+  filter(Time != "T47") %>%
+  mutate(DSS = Study_group %>% forcats::fct_recode(`0` = "G2",`0.25` = "G3",`0.5` = "G4",`1` = "G5",`2` = "G6",`3` = "G7") %>% as.character %>% as.numeric ) %>%
+  merge(.,t(genus[, select_DSS_samples %>% as.character]), by.x="samplenr", by.y="row.names") %>%
+  select(contains("Akkermansia"),contains("D_5__Ruminococcus"),contains("Phascolarctobacterium"),contains("D_4__Christensenellaceae;D_5__uncultured"),DSS,Time_days, Rat_ID) %>%
+  mutate(DSS_group = ifelse(DSS>=1,"High dose","No or Low dose")) %>%
+  #filter(DSS ==0) %>%
+  rename_at(1, ~"Akkermansia") %>%
+  rename_at(2, ~"Ruminococcus") %>%
+  rename_at(3, ~"Phascolarctobacterium") %>%
+  rename_at(4, ~"Christensenellaceae") %>%
+  filter(DSS_group == "High dose") %>%
+  select(Akkermansia,Rat_ID,Time_days) %>%
+  merge(., akk_pamk$pamobject$clustering %>% as.data.frame %>% rename_at(1, ~"cluster"), by.x="Rat_ID", by.y="row.names") %>%
+  ggplot() + 
+  geom_line(aes(x=Time_days,y=Akkermansia + 10^-6, group=Rat_ID), linetype=3) + 
+  geom_point(aes(x=Time_days,y=Akkermansia + 10^-6,  col=cluster %>% as.character)) +
+  scale_y_log10() + facet_wrap(~cluster) + 
+  geom_smooth(aes(x=Time_days,y=Akkermansia + 10^-6, col=cluster %>% as.character)) + guides(col=FALSE) +
+  geom_vline(xintercept = 32) + geom_hline(yintercept = 0.009129289) + ylab("Akkermansia")
+
+
+
+```
+
+
+# figure stability potential
+
+```{r, fig.height=6, fig.width=10}
+
+
+source("PlotPotential2.r")
+
+test = merge(genus_pco$li, 
+             mapping_file %>% 
+               merge(., rat_metadata, by.x="Rat_ID", by.y="Animal_id_2"), by.x="row.names", by.y="X.SampleID") %>% 
+  #merge(.,data.frame(observed_otu, microbiota_type = as.character(microbiota_type)), by.x="Row.names", by.y="row.names") %>% 
+  filter(Time %in% c("T68") ) %>% 
+  filter(Study_group != "G1") %>%
+  mutate(DSS = Study_group %>% forcats::fct_recode(`0` = "G2",`0.25` = "G3",`0.5` = "G4",`1` = "G5",`2` = "G6",`3` = "G7") %>% as.character %>% as.numeric ) %>%
+  filter(DSS != 0) %>%
+  select(DSS,A1,A2)
+
+
+res2 <- movpotential_ews(test$A1, test$DSS  %>% as.character %>% as.numeric)
+
+
+PlotPotential2(res2$res, title = '', 
+               ylab.text = 'Microbial State\n(JSD derived metric)', xlab.text = 'Chronical Perturbation strength (DSS %)', 
+           cutoff = 0.5, plot.contours = TRUE, binwidth = 0.1) + theme_classic() 
+
+
+
+PlotPotential2_df =function(res, title = "", xlab.text, ylab.text, cutoff = 0.5, 
+          plot.contours = TRUE, binwidth = 0.2, bins = NULL) {
+  
+   cut.potential <- max(apply(res$pots, 1, min)) + cutoff * 
+    abs(max(apply(res$pots, 1, min)))
+  pots <- res$pots
+  pots[pots > cut.potential] <- cut.potential
+  intp <- tgp::interp.loess(as.vector(res$pars), as.vector(res$xis), 
+                            as.vector(pots), gridlen = 2 * dim(pots))
+  xy <- expand.grid(intp$x, intp$y)
+  z <- as.vector(intp$z)
+  z[is.na(z)] <- max(na.omit(z))
+  potential <- NULL
+  df <- data.frame(list(bg.var = xy[, 1], phylotype = xy[, 
+                                                         2], potential = z))
+  
+  
+  return(df)
+  
+          }
+
+PlotPotential2_plot = function(df, binwidth = 0.2, bins = NULL, plot.contours = TRUE, xlab.text, ylab.text, title = ""){
+  
+  bg.var <- NULL
+  phylotype <- NULL
+  p <- ggplot2::ggplot(df, aes(bg.var, phylotype, z = potential)) + 
+    geom_tile(aes(fill = potential)) + scale_fill_gradientn(colours = topo.colors(10))
+  if (plot.contours) {
+    if (!is.null(bins)) {
+      warning("bins argument is overriding the binwidth argument!")
+      p <- p + stat_contour(bins = bins)
+    }
+    else {
+      p <- p + stat_contour(binwidth = binwidth)
+    }
+  }
+  p <- p + xlab(xlab.text) + ylab(ylab.text) + labs(title = title)
+  p
+  
+}
+
+PlotPotential2_df(res2$res) %>% 
+  PlotPotential2_plot(title = '', ylab.text = 'Microbial State\n(JSD derived metric)', xlab.text = 'Chronical Perturbation strength (DSS %)')
+
+
+PlotPotential2_df(res2$res)
+
+
+
+
+
+
+l1 = wireframe(
+  potential~bg.var+phylotype, 
+  data = PlotPotential2_df(res2$res), 
+  drape = TRUE, shade=FALSE, aspect = c(0.8, 0.4), 
+  light.source = c(10,0,10), 
+  col.regions = topo.colors(100), 
+  screen = list(z = 10, x = -40, y=10), colorkey=FALSE, 
+  xlab="Perturbation\nstrength\n(DSS)", ylab="Ecological\nstate\n(JSD  metrics)", zlab="Potential",
+  par.box = list(col="grey"),col="grey",lwd=0.1, 
+  scales=list(arrows=F,col=1),
+  par.settings = 
+    list(axis.line = list(col = "transparent"),
+         
+         layout.heights =
+        list(top.padding = 0,
+ 	    main.key.padding = 0,
+ 	    key.axis.padding = 0,
+ 	    axis.xlab.padding = 0,
+ 	    xlab.key.padding = 0,
+ 	    key.sub.padding = 0,
+ 	    bottom.padding = 0),
+ 	    
+ 	    
+ 	      layout.widths =
+        list(left.padding = 0,
+ 	    key.ylab.padding = 0,
+ 	    ylab.axis.padding = 0,
+ 	    axis.key.padding = 0,
+ 	    right.padding = 0))
+ 	    
+         )
+
+
+print(l1)
+
+
+g1 <- grid::grid.grabExpr(print(l1)) 
+
+plot_grid(g1,pA_akk, nrow=2, labels = "AUTO") 
+
+
+ggsave("alternative_state.pdf",h=15,w=10)
+
+
+PlotPotential2_df(res2$res) %>% dim
+
+```
+
+
+
+```{r, eval=FALSE, include=FALSE}
+
+pdf(file="plot_potential_animate.pdf", width=4, height=4)
+  for (i in seq(0, 360 ,3)){
+    plot_potential=
+    wireframe(
+  potential~bg.var+phylotype, 
+  data = PlotPotential2_df(res2$res), 
+  drape = TRUE, shade=FALSE, aspect = c(0.8, 0.4), 
+  light.source = c(10,0,10), 
+  col.regions = topo.colors(100), 
+  screen = list(z = i, x = -40, y=10), colorkey=FALSE, 
+  xlab="Perturbation\nstrength\n(DSS)", ylab="Ecological\nstate\n(JSD  metrics)", zlab="Potential",
+  par.box = list(col="grey"),col="grey",lwd=0.1, 
+  scales=list(arrows=F,col=1),
+  par.settings = 
+    list(axis.line = list(col = "transparent"),
+         
+         layout.heights =
+        list(top.padding = 0,
+ 	    main.key.padding = 0,
+ 	    key.axis.padding = 0,
+ 	    axis.xlab.padding = 0,
+ 	    xlab.key.padding = 0,
+ 	    key.sub.padding = 0,
+ 	    bottom.padding = 0),
+ 	    
+ 	    
+ 	      layout.widths =
+        list(left.padding = 0,
+ 	    key.ylab.padding = 0,
+ 	    ylab.axis.padding = 0,
+ 	    axis.key.padding = 0,
+ 	    right.padding = 0))
+ 	    
+         )
+    
+    print(plot_potential)
+  }
+dev.off()
+
+# convert pdf to gif using ImageMagick
+#system("convert -delay 40 *.pdf example_3_reduced.gif")
+
+
+
+
+
+```
+
+
+## hysteresis and resilience
+
+
+
+import histological data
+```{r, fig.height=7, fig.width=10}
+
+
+hysteresis = read.csv2("hysteresis.csv") %>% 
+  mutate(hysteresis_grp = fct_recode(hysteresis_grp, `resistant\nprofile` = "high",
+                                                      `resilient\nprofile` = "intermediate",                          
+                                                      `no resilient\nprofile` = "low"))
+
+
+histo <- readxl::read_excel("Richness-2017-03-23-Data Transfer Matrix-SDB.xlsx", 
+    sheet = "Histopathological reading", 
+    skip = 2)
+
+colnames(histo)[3] = "Rat_ID"
+
+histo %>% .[,c(3,28,39)] %>% 
+  #rename_at(1,~"Rat_ID") %>%
+  rename(score_histo=`Total (max=37)`) %>%
+  filter(Region=="distal") %>%
+  mutate(Rat_ID=paste0("R",Rat_ID)) -> histo 
+
+
+
+
+```
+
+
+build data.frame with akkermansia and time point
+```{r}
+
+
+
+mapping_file %>% 
+  merge(
+    ., 
+    rat_metadata, 
+    by.x="Rat_ID", 
+    by.y="Animal_id_2"
+    ) %>% 
+  merge(.,hysteresis, by = "Rat_ID") %>%
+  merge(., 
+        genus[row.names(genus) %>% grep("Akkermansia",.),] %>% as.data.frame(row.names="genus") %>% t , 
+        #genus[row.names(genus) %>% grep("Ruminococcus",.),] %>% as.data.frame(row.names="genus") %>% t ,
+        by.x="X.SampleID", 
+        by.y="row.names") %>% 
+  merge(.,genus_pco$li, by.y="row.names", by.x="X.SampleID") %>%
+select(X.SampleID, A1,A2,A3, genus, hysteresis_grp, Time,Study_group,Rat_ID) %>%
+  mutate(Time=fct_relevel(Time, c("Tm49","Tm41","Tm34","Tm20","Tm13","Tm7","Tm1","T3","T13","T17","T27","T31","T40","T47","T63","T68"))) %>%
+  mutate(DSSpulse = fct_recode(Time, 
+                            Water = "Tm49",  
+                            Water = "Tm41", 
+                            Water = "Tm34", 
+                            Water = "Tm20", 
+                            Water = "Tm13", 
+                            Water = "Tm7", 
+                            DSS = "Tm1", 
+                            Water   = "T3",
+                            DSS = "T13",
+                            Water   = "T17",
+                            DSS = "T27",
+                            Water   = "T31",
+                            Water = "T40",
+                            Water = "T47",
+                            Water = "T63",
+                            Water = "T68"
+                            
+                            )) %>%
+  
+mutate(diet = fct_recode(Time, 
+                            MZ  = "Tm49",  
+                            MZ  = "Tm41", 
+                            MZ  = "Tm34", 
+                            AIN = "Tm20", 
+                            AIN = "Tm13", 
+                            AIN = "Tm7", 
+                            AIN = "Tm1", 
+                            AIN = "T3",
+                            AIN = "T13",
+                            AIN = "T17",
+                            AIN = "T27",
+                            AIN = "T31",
+                            AIN = "T40",
+                            AIN = "T47",
+                            AIN = "T63",
+                            AIN = "T68"
+                            
+                            )) %>%
+  
+  mutate(perturbation = fct_recode(Time,
+                            `0` = "Tm1", 
+                            `3` = "T3",
+                            `0` = "T13",
+                            `3` = "T17",
+                            `0` = "T27",
+                            `3` = "T31",
+                            `0` = "T40",
+                            `-3` = "T47",
+                            `-6` = "T63",
+                            `-8` = "T68"
+                            
+                            ))  %>%
+  
+  mutate(press_cumul_day = fct_recode(Time,
+                            `0` = "Tm1", 
+                            `3` = "T3",
+                            `13` = "T13",
+                            `17` = "T17",
+                            `27` = "T27",
+                            `31` = "T31",
+                            `22` = "T40",
+                            `15` = "T47",
+                            `0` = "T63",
+                            `-6` = "T68"
+                            
+                            ))  %>%
+  
+mutate(DSSpress = fct_recode(Time, 
+                            Water = "Tm49",  
+                            Water = "Tm41", 
+                            Water = "Tm34", 
+                            Water = "Tm20", 
+                            Water = "Tm13", 
+                            Water = "Tm7", 
+                            DSS = "Tm1", 
+                            DSS   = "T3",
+                            DSS = "T13",
+                            DSS   = "T17",
+                            DSS = "T27",
+                            DSS   = "T31",
+                            Water = "T40",
+                            Water = "T47",
+                            Water = "T63",
+                            Water = "T68"
+                            
+                            )) %>%
+  
+  mutate(Time=Time %>% gsub("T","",.) %>% gsub("m","-",.) %>% as.character %>% as.numeric) %>%
+  filter(Time > -2) %>%
+  mutate(perturbation = perturbation %>% as.character %>% as.numeric) %>%
+  filter(Study_group != "G1") %>%
+  arrange(Time) -> akk_df
+
+
+
+
+
+
+```
+
+
+
+
+```{r, fig.height=4, fig.width=10}
+
+resilience_plot =
+
+akk_df %>%
+  filter(Study_group %in% c("G5","G6","G7")) %>%
+  ggplot() + 
+  #geom_point(aes(x=Time,y=genus+10^-6)) + 
+  geom_smooth(aes(x=Time,y=genus+10^-6, group=hysteresis_grp)) + 
+  facet_wrap(~hysteresis_grp) + 
+  scale_y_log10() + geom_hline(yintercept = 10^-1.98, linetype =2) +
+  geom_vline(xintercept = 31, linetype =2) + ylab("Akkermansia") + xlab("Time (days)") +
+  annotate("text",x=15,y=0.3,label="DSS pulse\n(x3)", size=3) +
+  annotate("text",x=45,y=0.3,label="Washout\n", size=3) +
+  annotate("text",x=5,y=0.015,label="Tipping point", size=3) 
+
+resilience_plot
+
+```
+
+
+```{r, fig.height=4, fig.width=3}
+
+
+
+histo_DSS_hysteresis_barplot =
+akk_df %>%
+  #filter(Study_group != "G2") %>%
+  select(hysteresis_grp,Study_group, Rat_ID) %>% 
+  unique %>%
+  merge(.,histo, by="Rat_ID") %>%
+  mutate(DSS_group = ifelse(Study_group == "G5" | Study_group == "G6" | Study_group == "G7", "high", "low" )) %>%
+  filter(DSS_group == "high") %>%
+  mutate(score_histo = as.numeric(as.character(score_histo))) %>%
+  group_by(hysteresis_grp) %>%
+  summarise(n = n(), m = mean(score_histo), sem = sd(score_histo)/sqrt(n())) %>%
+  ungroup() %>%
+  ggplot(aes(x=hysteresis_grp, y=m)) +
+  geom_bar(fill="white", stat="identity", position="dodge", color="black") + 
+  geom_errorbar(aes(ymin=m-sem,ymax=m+sem),width=.2, position=position_dodge(.9)) +
+  #scale_fill_brewer(type="qual") +
+  ylab("Histological score") +
+  xlab("") +
+  theme(legend.position = c(0.1, 0.9))
+
+
+histo_DSS_hysteresis_barplot
+
+
+```
+
+
+
+```{r, fig.height=10, fig.width=10}
+
+plot_grid(resilience_plot,plot_grid(g1,histo_DSS_hysteresis_barplot,nrow=1,rel_widths = c(4,1.5), labels=c("B","C")),nrow=2,rel_heights = c(1,1.6), labels = c("A",NA))
+
+ggsave("Figure_Akk_hysteresis_host.pdf")
+
+```
+
+
+
+## import gro alpha data
+
+```{r}
+GRO_alpha = readxl::read_excel("Multiplex_Richness_SDB_200318.xlsx", sheet = "Multiplex T41 T47", skip=2) %>%
+  select(3,`Blood harvest Timepoint`,33) %>%
+  filter(`Blood harvest Timepoint` == "T47") %>%
+  na.omit
+
+colnames(GRO_alpha) = c("Rat_ID","Time","GRO_Alpha")
+  
+
+GRO_alpha %>%
+  mutate(Rat_ID = paste0("R",Rat_ID)) %>%
+  mutate(GRO_Alpha = gsub("<=0","0",GRO_Alpha) %>% as.numeric) -> GRO_alpha
+  
+  
+  
+
+```
+
+
+```{r}
+
+GRO_alpha %>%
+  merge(.,rat_metadata, by.x="Rat_ID", by.y="Animal_id_2") %>%
+  merge(hysteresis, by="Rat_ID") %>%
+  select(Rat_ID,GRO_Alpha, Study_group, hysteresis_grp) %>%
+  filter(Study_group %in% c("G5","G6","G7") ) %>%
+  ggplot() + geom_jitter(aes(x=hysteresis_grp, y=GRO_Alpha, col=Study_group), width = 0.1, size=5, alpha=0.5)
+
+
+
+
+```
+
+
+## import all physio parameters
+```{r, message=FALSE, warning=FALSE}
+physio = 
+readr::read_csv2("Data_All.csv") %>%
+  select(SUBJID,diet,dose,weight_colon,length_colon,Lipocalin_T40_pg_mL,Lipocalin_T69_pg_mL,Total_distal,Total_proximal,Total_proximal,Crypt_diameter_distal,Crypt_height_distal,
+         Goblet_cell_number_distal,Crypt_height_proximal,Crypt_diameter_proximal,Goblet_cell_number_proximal) %>%
+  filter(diet != "AIN-93G")
+
+physio
+
+```
+
+
+```{r, fig.height=8, fig.width=10}
+
+physio %>%
+  mutate(Rat_ID = paste0("R",SUBJID)) %>%
+  merge(.,rat_metadata,by.x="Rat_ID",by.y="Animal_id_2") %>%
+  select(-SUBJID,-diet,-Cage_provider,-Animal.Identification,-Filiation,-Bacteroides,-Weight) %>%
+  melt(id.vars=c("Rat_ID","dose","Study_group","Animal_id")) %>%
+  na.omit() %>%
+  mutate(DSS_group = ifelse(dose>=1,"High","Low")) %>%
+  ggplot() +  geom_boxplot(aes(x=Study_group,y=value,fill=Study_group)) + facet_wrap(~variable, scale="free_y") + scale_fill_brewer()
+
+
+# 
+# 
+# physio %>%
+#   mutate(Rat_ID = paste0("R",SUBJID)) %>%
+#   merge(.,rat_metadata,by.x="Rat_ID",by.y="Animal_id_2") %>%
+#   select(-SUBJID,-diet,-Cage_provider,-Animal.Identification,-Filiation,-Bacteroides,-Weight) %>%
+#   melt(id.vars=c("Rat_ID","dose","Study_group","Animal_id")) %>%
+#   na.omit() %>%
+#   mutate(DSS_group = ifelse(dose>=1,"High","Low")) %>%
+#   ggplot() +  
+#   geom_density_ridges_gradient(aes(x=value %>% scale, y=variable , fill=..x..)) + 
+#   #geom_density(aes(x=Bifidobacterium + 10^-6, fill=cat_age_val)) +
+#   
+#   facet_wrap(~DSS_group, scales ="free_y", ncol=2) +
+#   viridis::scale_fill_viridis(option = "B") +
+#   guides(fill=FALSE) +
+#   scale_x_log10() + theme_dark()
+# 
+
+physio %>%
+  mutate(Rat_ID = paste0("R",SUBJID)) %>%
+  merge(.,rat_metadata,by.x="Rat_ID",by.y="Animal_id_2") %>%
+  select(-SUBJID,-diet,-Cage_provider,-Animal.Identification,-Filiation,-Bacteroides,-Weight,-dose,-Animal_id) %>%
+  na.omit() %>%
+  tibble::rownames_to_column("id") %>%
+  select(-id,-Study_group) %>%
+  tibble::column_to_rownames("Rat_ID") %>%
+  dudi.pca(.,scannf=F, nf=3) %>% 
+  .$li %>%
+  merge(rat_metadata,by.x="row.names", by.y="Animal_id_2") %>%
+  mutate(DSS_group = ifelse(Study_group == "G5" | Study_group == "G6" | Study_group == "G7", "high", "low" )) %>%
+  #ggplot() + geom_histogram(aes(x=Axis1, fill=Study_group), alpha=0.5) + scale_fill_brewer() + facet_wrap(~DSS_group)
+  ggplot() + geom_density(aes(x=Axis1), alpha=0.5) 
+  
+  
+
+physio %>%
+  mutate(Rat_ID = paste0("R",SUBJID)) %>%
+  merge(.,rat_metadata,by.x="Rat_ID",by.y="Animal_id_2") %>%
+  select(-SUBJID,-diet,-Cage_provider,-Animal.Identification,-Filiation,-Bacteroides,-Weight) %>%
+  melt(id.vars=c("Rat_ID","dose","Study_group","Animal_id")) %>%
+  na.omit() %>%
+  mutate(DSS_group = ifelse(dose>=1,"High","Low")) %>%
+  ggplot() +  geom_histogram(aes(x=value+0.1, fill=dose%>%as.character)) + facet_wrap(~variable, scale="free") + scale_fill_brewer()
+
+
+```
+
+test physio parameters for bimodality
+
+fecal lipocalin, total distal score, crypt height in the distal colon, 
+
+
+```{r, message=FALSE, warning=FALSE}
+
+
+library(mclust)
+
+physio %>%
+  mutate(Rat_ID = paste0("R",SUBJID)) %>%
+  merge(.,rat_metadata,by.x="Rat_ID",by.y="Animal_id_2") %>%
+  select(-SUBJID,-diet,-Cage_provider,-Animal.Identification,-Filiation,-Bacteroides,-Weight) %>%
+  melt(id.vars=c("Rat_ID","dose","Study_group","Animal_id")) %>%
+  na.omit() %>%
+  mutate(DSS_group = ifelse(dose>=1,"High","Low")) %>%
+  group_by(variable) %>%
+  do(data.frame(out=densityMclust(.$value, verbose=FALSE) %>% summary %>% .$G))
+
+
+
+physio %>%
+  mutate(Rat_ID = paste0("R",SUBJID)) %>%
+  merge(.,rat_metadata,by.x="Rat_ID",by.y="Animal_id_2") %>%
+  select(-SUBJID,-diet,-Cage_provider,-Animal.Identification,-Filiation,-Bacteroides,-Weight) %>%
+  melt(id.vars=c("Rat_ID","dose","Study_group","Animal_id")) %>%
+  na.omit() %>%
+  mutate(DSS_group = ifelse(dose>=1,"High","Low")) %>%
+  group_by(variable) %>%
+  tidyr::nest() %>%
+  mutate(model = purrr::map(data, ~ densityMclust(.$value, verbose=FALSE))) %>%
+  mutate(summary = purrr::map(model,~summary)) %>%
+  tidyr::unnest(model %>% purrr::map(broom::tidy)) 
+  
+
+
+```
+
+
+
+```{r, fig.height=9, fig.width=12}
+
+physio %>%
+  mutate(Rat_ID = paste0("R",SUBJID)) %>%
+  merge(.,rat_metadata,by.x="Rat_ID",by.y="Animal_id_2") %>%
+  select(-SUBJID,-diet,-Cage_provider,-Animal.Identification,-Filiation,-Bacteroides,-Weight) %>%
+  melt(id.vars=c("Rat_ID","dose","Study_group","Animal_id")) %>%
+  na.omit() %>%
+  merge(.,hysteresis, by="Rat_ID") %>%
+  filter(dose > 0.9) %>%
+  group_by(variable, hysteresis_grp) %>%
+  summarise(n = n(), m = mean(value), sem = sd(value)/sqrt(n())) %>%
+  ungroup() %>%
+  #ggplot +  geom_boxplot(aes(x=hysteresis_grp,y=value)) + facet_wrap(~variable, scale="free_y")
+  ggplot(aes(x=hysteresis_grp, y=m)) +
+  geom_bar(fill="white", stat="identity", position="dodge", color="black") + 
+  geom_errorbar(aes(ymin=m-sem,ymax=m+sem),width=.2, position=position_dodge(.9)) +
+  #scale_fill_brewer(type="qual") +
+  ylab("") +
+  xlab("") + facet_wrap(~variable %>% gsub("_","\n",.), scale="free_y")
+
+
+
+physio %>%
+  mutate(Rat_ID = paste0("R",SUBJID)) %>%
+  merge(.,rat_metadata,by.x="Rat_ID",by.y="Animal_id_2") %>%
+  select(-SUBJID,-diet,-Cage_provider,-Animal.Identification,-Filiation,-Bacteroides,-Weight) %>%
+  melt(id.vars=c("Rat_ID","dose","Study_group","Animal_id")) %>%
+  na.omit() %>%
+  merge(.,hysteresis, by="Rat_ID") %>%
+  filter(dose > 0.9) %>%
+  #group_by(variable, hysteresis_grp) %>%
+  #summarise(n = n(), m = mean(value), sem = sd(value)/sqrt(n())) %>%
+  #ungroup() %>%
+  ggplot +  geom_violin(aes(x=hysteresis_grp,y=value)) + facet_wrap(~variable, scale="free_y")
+  
+
+
+```
+
+
+analyse interclass
+```{r}
+
+
+physio %>%
+  mutate(Rat_ID = paste0("R",SUBJID)) %>%
+  merge(.,rat_metadata,by.x="Rat_ID",by.y="Animal_id_2") %>%
+  select(-SUBJID,-diet,-Cage_provider,-Animal.Identification,-Filiation,-Bacteroides,-Weight) %>%
+  melt(id.vars=c("Rat_ID","dose","Study_group","Animal_id")) %>%
+  na.omit() %>%
+  merge(.,hysteresis, by="Rat_ID") %>%
+  filter(dose > 0.9) %>%
+  dcast(Rat_ID+hysteresis_grp~variable, value.var="value") -> df
+
+df_pca = dudi.pca(df[-c(1,2)] %>% na.omit, scannf=F, nf=10)
+
+bca(df_pca, fac = df %>% na.omit %>% .$hysteresis_grp, scannf=F, nf=2) %>% randtest()
+
+
+
+```
+
+
