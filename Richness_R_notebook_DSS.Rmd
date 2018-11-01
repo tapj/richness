@@ -1142,9 +1142,16 @@ akk_cor%>%
   summarise(n=n(), median=median(akk_cor), q25=quantile(akk_cor,0.25), q75 = quantile(akk_cor,0.75) ) %>%
   mutate(direction = ifelse(median>0,"pos","neg")) %>%
   filter((direction == "pos" & q25 > 0)|(direction == "neg" & q75 < 0)) %>%
-  #filter(abs(median) > 0.25) %>%
+  filter(abs(median) > 0.25) %>%
    tidyr::separate(variable,into=c("Domain","Phylum","Class","Order","Family","Genus"),sep=";") %>%
-  filter(Genus != "Other", Family != "D_5__uncultured") %>%
+  mutate(Genus = ifelse(Family == "D_4__Prevotellaceae" & Genus == "D_5__uncultured","Prevotellaceae",Genus)) %>%
+  mutate(Genus = ifelse(Family == "D_4__Ruminococcaceae" & Genus == "D_5__uncultured","Ruminococcaceae",Genus)) %>%
+  mutate(Genus = ifelse(Family == "D_4__Erysipelotrichaceae" & Genus == "D_5__Incertae Sedis","Erysipelotrichaceae",Genus)) %>%
+  mutate(Genus = ifelse(Family == "D_4__S24-7" & Genus == "D_5__uncultured","S24-7a",Genus)) %>%
+  mutate(Genus = ifelse(Family == "D_4__Family XIII" & Genus == "D_5__uncultured","Clostridiales XIII",Genus)) %>%
+  mutate(Genus = ifelse(Family == "D_4__S24-7" & Genus == "Other","S24-7b",Genus)) %>%
+   mutate(Genus = ifelse(Family == "D_4__S24-7" & Genus == "Ambiguous_taxa","S24-7c",Genus)) %>%
+  filter(Genus != "Other", Family != "D_4__uncultured") %>%
   mutate(Akkermansia="Akkermansia") %>%
   select(Akkermansia,Genus,hysteresis_grp,median) %>%
   ungroup() %>%
@@ -1157,11 +1164,160 @@ edge.attributes(akk_net)$hysteresis_grp = edge.attributes(akk_net)$hysteresis_gr
 
 akk_net %>%
 ggraph(., layout = 'kk') + 
-    geom_edge_link(aes(colour = median), width=2, alpha=0.7) + 
+    geom_edge_link(aes(colour = median), width=2, alpha=0.5) + 
   facet_edges(~hysteresis_grp , nrow=1, labeller = my_lab) +   
   geom_node_text(aes(label = name)) +
   scale_edge_colour_gradient2(low = "red", mid="yellow", high="green") +
-  theme_dark()
+  theme_dark() + theme(axis.text.x = element_blank(), axis.text.y = element_blank(),
+                       axis.ticks.x=element_blank(), axis.ticks.y=element_blank(),
+                       strip.text.x = element_text(size = 20)) + 
+  xlab("") + ylab("") 
+
+
+
+```
+
+focus on Subdoligranulum
+
+
+```{r}
+
+
+
+genera_select_melt %>%
+  filter(variable == "D_0__Bacteria;D_1__Firmicutes;D_2__Clostridia;D_3__Clostridiales;D_4__Ruminococcaceae;D_5__Subdoligranulum") %>%
+  ggplot() + 
+  geom_smooth(aes(x=Time,y=value+10^-6, group=hysteresis_grp)) + 
+  facet_wrap(~hysteresis_grp) + 
+  scale_y_log10() + #geom_hline(yintercept = 10^-1.98, linetype =2) +
+  geom_vline(xintercept = 31, linetype =2) + ylab("Subdoligranulum") + xlab("Time (days)") +
+  annotate("text",x=15,y=0.001,label="DSS pulse\n(x3)", size=3) +
+  annotate("text",x=45,y=0.001,label="Washout\n", size=3) #+
+  #annotate("text",x=5,y=0.015,label="Tipping point", size=3) 
+  
+
+select_genera
+
+```
+
+
+
+
+### global network around Akkermansia
+
+```{r, fig.height=6, fig.width=20}
+
+select_genera = 
+
+akk_cor%>%
+  group_by(hysteresis_grp,variable) %>%
+  summarise(n=n(), median=median(akk_cor), q25=quantile(akk_cor,0.25), q75 = quantile(akk_cor,0.75) ) %>%
+  mutate(direction = ifelse(median>0,"pos","neg")) %>%
+  filter((direction == "pos" & q25 > 0)|(direction == "neg" & q75 < 0)) %>% 
+  filter(abs(median) > 0.4) %>%
+  mutate(variable = variable %>% as.character) %>% .$variable %>% unique
+
+
+select_genera =c("D_0__Bacteria;D_1__Verrucomicrobia;D_2__Verrucomicrobiae;D_3__Verrucomicrobiales;D_4__Verrucomicrobiaceae;D_5__Akkermansia",select_genera )
+
+
+mapping_file %>% 
+  merge(
+    ., 
+    rat_metadata, 
+    by.x="Rat_ID", 
+    by.y="Animal_id_2"
+    ) %>% 
+  merge(.,hysteresis, by = "Rat_ID", all.x=TRUE) %>%
+  merge(., 
+        genus %>% .[select_genera,] %>% t, 
+        by.x="X.SampleID", 
+        by.y="row.names") %>%
+  mutate(Time=fct_relevel(Time, c("Tm49","Tm41","Tm34","Tm20","Tm13","Tm7","Tm1","T3","T13","T17","T27","T31","T40","T47","T63","T68"))) %>% 
+  mutate(Time=Time %>% gsub("T","",.) %>% gsub("m","-",.) %>% as.character %>% as.numeric) %>%
+  
+  select(-X.SampleID, -BarcodeSequence, -LinkerPrimerSequence, -samplenr, -INRA_DNA_ID, -DNAextractionOperator, -Time_DSS, -Description, -Animal_id, -Weight, -Bacteroides, -Filiation, -Cage_provider, -Animal.Identification ) %>%
+  filter(Diet != "AIN93G", Time > -10) %>%
+  filter(DSS == "1" | DSS == "2" | DSS == "3") %>%
+  select(-Diet, -Study_group) %>%
+  melt(id.vars=c("Rat_ID","Time","DSS","hysteresis_grp")) -> genera_select_melt
+
+
+genera_select_melt %>%
+  merge(.,genera_select_melt,by=c("Rat_ID","Time","DSS","hysteresis_grp")) %>%
+  filter(!(variable.x==variable.y)) %>%
+  group_by(Rat_ID,DSS,hysteresis_grp,variable.x,variable.y) %>%
+  summarise(rho = cor(value.x,value.y,method="spearman") ) -> network_df_cor
+
+network_df_cor %>%
+  na.omit() %>%
+  ungroup() %>%
+  group_by(hysteresis_grp,variable.x,variable.y) %>%
+  summarise(n=n(), median=median(rho), q25=quantile(rho,0.25), q75 = quantile(rho,0.75) ) %>%
+  mutate(direction = ifelse(median>0,"pos","neg")) %>%
+  filter((direction == "pos" & q25 > 0)|(direction == "neg" & q75 < 0)) %>% 
+  filter(abs(median) > 0.4) %>%
+  tidyr::separate(variable.x,into=paste0(c("Domain","Phylum","Class","Order","Family","Genus"),".x"),sep=";") %>%
+  tidyr::separate(variable.y,into=paste0(c("Domain","Phylum","Class","Order","Family","Genus"),".y"),sep=";") %>%
+  mutate(Genus.x = ifelse(Family.x == "D_4__Prevotellaceae" & Genus.x == "D_5__uncultured","Prevotellaceae",Genus.x),
+         Genus.y = ifelse(Family.y == "D_4__Prevotellaceae" & Genus.y == "D_5__uncultured","Prevotellaceae",Genus.y)) %>%
+  mutate(Genus.x = ifelse(Family.x == "D_4__Ruminococcaceae" & Genus.x == "D_5__uncultured","Ruminococcaceae",Genus.x),
+         Genus.y = ifelse(Family.y == "D_4__Ruminococcaceae" & Genus.y == "D_5__uncultured","Ruminococcaceae",Genus.y)) %>%
+  mutate(Genus.x = ifelse(Family.x == "D_4__Erysipelotrichaceae" & Genus.x == "D_5__Incertae Sedis","Erysipelotrichaceae",Genus.x),
+         Genus.y = ifelse(Family.y == "D_4__Erysipelotrichaceae" & Genus.y == "D_5__Incertae Sedis","Erysipelotrichaceae",Genus.y)) %>%
+  mutate(Genus.x = ifelse(Family.x == "D_4__S24-7" & Genus.x == "D_5__uncultured","S24-7a",Genus.x),
+         Genus.y = ifelse(Family.y == "D_4__S24-7" & Genus.y == "D_5__uncultured","S24-7a",Genus.y)) %>%
+  mutate(Genus.x = ifelse(Family.x == "D_4__Family XIII" & Genus.x == "D_5__uncultured","Clostridiales XIII",Genus.x),
+         Genus.y = ifelse(Family.y == "D_4__Family XIII" & Genus.y == "D_5__uncultured","Clostridiales XIII",Genus.y)) %>%
+  mutate(Genus.x = ifelse(Family.x == "D_4__S24-7" & Genus.x == "Other","S24-7b",Genus.x),
+         Genus.y = ifelse(Family.y == "D_4__S24-7" & Genus.y == "Other","S24-7b",Genus.y)) %>%
+   mutate(Genus.x = ifelse(Family.x == "D_4__S24-7" & Genus.x == "Ambiguous_taxa","S24-7c",Genus.x),
+         Genus.y = ifelse(Family.y == "D_4__S24-7" & Genus.y == "Ambiguous_taxa","S24-7c",Genus.y)) %>%
+  filter(Genus.x != "Other", Family.x != "D_4__uncultured",Genus.y != "Other", Family.y != "D_4__uncultured") %>%
+  select(Genus.x,Genus.y,hysteresis_grp,median) %>%
+  ungroup() %>%
+  #mutate(hysteresis_grp = hysteresis_grp %>% factor(levels=c("resistant\nprofile","resilient\nprofile","no resilient\nprofile"))) %>%
+  mutate(Genus.x = Genus.x %>% gsub("D_5__","",.), Genus.y = Genus.y %>% gsub("D_5__","",.)) %>%
+  igraph::graph_from_data_frame() -> global_akk_net
+
+edge.attributes(global_akk_net)$hysteresis_grp = edge.attributes(global_akk_net)$hysteresis_grp %>% factor(levels=c("resistant\nprofile","resilient\nprofile","no resilient\nprofile"))
+
+
+global_akk_net %>%
+ggraph(., layout = 'kk') + 
+    geom_edge_link(aes(colour = median),alpha=0.5, width=0.5) + 
+  facet_edges(~hysteresis_grp , nrow=1, labeller = my_lab) +   
+  geom_node_text(aes(label = name)) +
+  scale_edge_colour_gradient2(low = "red", mid="yellow", high="green") +
+  theme_dark() + theme(axis.text.x = element_blank(), axis.text.y = element_blank(),
+                       axis.ticks.x=element_blank(), axis.ticks.y=element_blank(),
+                       strip.text.x = element_text(size = 20)) + 
+  xlab("") + ylab("") 
+
+
+
+```
+
+
+
+focus on Subdoligranulum
+
+
+```{r}
+
+
+
+genera_select_melt %>%
+  filter(variable == "D_0__Bacteria;D_1__Firmicutes;D_2__Clostridia;D_3__Clostridiales;D_4__Ruminococcaceae;D_5__Subdoligranulum") %>%
+  ggplot() + 
+  geom_smooth(aes(x=Time,y=value+10^-6, group=hysteresis_grp)) + 
+  facet_wrap(~hysteresis_grp) + 
+  scale_y_log10() + #geom_hline(yintercept = 10^-1.98, linetype =2) +
+  geom_vline(xintercept = 31, linetype =2) + ylab("Subdoligranulum") + xlab("Time (days)") +
+  annotate("text",x=15,y=0.001,label="DSS pulse\n(x3)", size=3) +
+  annotate("text",x=45,y=0.001,label="Washout\n", size=3) #+
+  #annotate("text",x=5,y=0.015,label="Tipping point", size=3) 
+  
 
 
 
@@ -1170,6 +1326,149 @@ ggraph(., layout = 'kk') +
 
 
 
+
+```{r, fig.height=30, fig.width=7}
+
+genera_select_melt %>%
+  ggplot() + 
+  geom_smooth(aes(x=Time,y=value+10^-6, group=hysteresis_grp)) + 
+  facet_grid(variable %>% gsub(";","\n",.)~hysteresis_grp, scale="free_y") + 
+  theme(strip.text.y = element_text(size = 7)) +
+  scale_y_log10() #+ #geom_hline(yintercept = 10^-1.98, linetype =2) +
+  #geom_vline(xintercept = 31, linetype =2) + #ylab("Alloprevotella") + xlab("Time (days)") +
+  #annotate("text",x=15,y=0.001,label="DSS pulse\n(x3)", size=3) +
+  #annotate("text",x=45,y=0.001,label="Washout\n", size=3) #+
+  #annotate("text",x=5,y=0.015,label="Tipping point", size=3) 
+
+  
+  
+
+
+```
+
+
+```{r, fig.height=8, fig.width=10}
+
+
+select_genera = 
+
+akk_cor%>%
+  group_by(hysteresis_grp,variable) %>%
+  summarise(n=n(), median=median(akk_cor), q25=quantile(akk_cor,0.25), q75 = quantile(akk_cor,0.75) ) %>%
+  mutate(direction = ifelse(median>0,"pos","neg")) %>%
+  filter((direction == "pos" & q25 > 0)|(direction == "neg" & q75 < 0)) %>% 
+  filter(abs(median) > 0.4) %>%
+  mutate(variable = variable %>% as.character) %>% .$variable %>% unique
+
+
+select_genera =c("D_0__Bacteria;D_1__Verrucomicrobia;D_2__Verrucomicrobiae;D_3__Verrucomicrobiales;D_4__Verrucomicrobiaceae;D_5__Akkermansia",select_genera )
+
+
+mapping_file %>% 
+  merge(
+    ., 
+    rat_metadata, 
+    by.x="Rat_ID", 
+    by.y="Animal_id_2"
+    ) %>% 
+  merge(.,hysteresis, by = "Rat_ID", all.x=TRUE) %>%
+  merge(., 
+        genus %>% .[select_genera,] %>% t, 
+        by.x="X.SampleID", 
+        by.y="row.names") %>%
+  mutate(Time=fct_relevel(Time, c("Tm49","Tm41","Tm34","Tm20","Tm13","Tm7","Tm1","T3","T13","T17","T27","T31","T40","T47","T63","T68"))) %>% 
+  mutate(Time=Time %>% gsub("T","",.) %>% gsub("m","-",.) %>% as.character %>% as.numeric) %>%
+  
+  select(-X.SampleID, -BarcodeSequence, -LinkerPrimerSequence, -samplenr, -INRA_DNA_ID, -DNAextractionOperator, -Time_DSS, -Description, -Animal_id, -Weight, -Bacteroides, -Filiation, -Cage_provider, -Animal.Identification ) %>%
+  filter(Diet != "AIN93G", Time > -10) %>%
+  filter(DSS == "1" | DSS == "2" | DSS == "3") %>%
+  select(-Diet, -Study_group) %>%
+  melt(id.vars=c("Rat_ID","Time","DSS","hysteresis_grp")) -> genera_select_melt
+
+
+# 
+#   genera_select_melt %>%
+#   group_by(variable,hysteresis_grp, Time) %>%
+#   summarise(value = (value+10^-6) %>% log10() %>% mean() ) %>%
+#   ungroup() %>%
+#   group_by(variable,Time) %>%
+#   mutate(value = value %>% scale()) %>%
+#   ungroup() %>%
+#   reshape2::dcast(variable~hysteresis_grp+Time) %>%
+#   tibble::column_to_rownames("variable") %>%
+#   kmeans(.,3) %>%
+#   .$cluster %>%
+#   as.matrix %>%
+#   as.data.frame %>%
+#   rename(cluster=V1) -> genus_cluster
+
+
+  
+  genera_select_melt %>%
+  group_by(variable,hysteresis_grp, Time) %>%
+  summarise(value = (value+10^-6) %>% log10() %>% mean() ) %>%
+  ungroup() %>%
+  group_by(variable,Time) %>%
+  mutate(value = value %>% scale()) %>%
+  ungroup() %>%
+  reshape2::dcast(variable~hysteresis_grp+Time) %>%
+  tibble::column_to_rownames("variable") %>% 
+    fpc::pamk( metric="euclidean") %>%
+    .$pamobject %>%
+    .$clustering %>%
+    as.matrix() %>%
+    as.data.frame() %>%
+    rename(cluster = V1) -> genus_cluster 
+
+  
+  
+  
+ 
+
+  
+pp = genera_select_melt %>%
+  merge(.,genus_cluster, by.x="variable", by.y="row.names") %>%
+  group_by(cluster,variable,hysteresis_grp, Time) %>%
+  summarise(value = (value+10^-6) %>% log10() %>% mean() ) %>%
+  ungroup() %>%
+  group_by(variable,Time) %>%
+  mutate(value = value  %>% scale() ) %>%
+  ggplot() + geom_boxplot(aes(x=Time%>%as.character,y=value)) +
+  facet_grid(cluster~hysteresis_grp, scale="free_y") + 
+  theme(strip.text.y = element_text(size = 7)) 
+  
+  
+ #g=gridExtra::tableGrob(genus_cluster), theme=gridExtra::ttheme_minimal())
+
+ 
+ genus_cluster %>% 
+tibble::rownames_to_column("genus") %>% 
+ tidyr::separate(genus,into=c("Domain","Phylum","Class","Order","Family","Genus"),sep=";") %>%
+   mutate(Genus = ifelse(Family == "D_4__Prevotellaceae" & Genus == "D_5__uncultured","Prevotellaceae",Genus)) %>%
+  mutate(Genus = ifelse(Family == "D_4__Ruminococcaceae" & Genus == "D_5__uncultured","Ruminococcaceae",Genus)) %>%
+  mutate(Genus = ifelse(Family == "D_4__Erysipelotrichaceae" & Genus == "D_5__Incertae Sedis","Erysipelotrichaceae",Genus)) %>%
+  mutate(Genus = ifelse(Family == "D_4__S24-7" & Genus == "D_5__uncultured","S24-7a",Genus)) %>%
+  mutate(Genus = ifelse(Family == "D_4__Family XIII" & Genus == "D_5__uncultured","Clostridiales XIII",Genus)) %>%
+  mutate(Genus = ifelse(Family == "D_4__S24-7" & Genus == "Other","S24-7b",Genus)) %>%
+   mutate(Genus = ifelse(Family == "D_4__S24-7" & Genus == "Ambiguous_taxa","S24-7c",Genus)) %>%
+   select(Genus,cluster) %>%
+   mutate(Genus = Genus %>% gsub("D_5__","",.)) %>%
+   arrange(cluster) %>%
+   gridExtra::tableGrob() -> g
+
+pp = genera_select_melt %>%
+  merge(.,genus_cluster, by.x="variable", by.y="row.names") %>%
+  group_by(variable,Time) %>%
+  mutate(value = (value+10^-6)  %>% log10() %>% scale() ) %>%
+  ggplot() +
+  geom_smooth(aes(x=Time,y=value+10^-6, group=hysteresis_grp), method="loess") + 
+  facet_grid(cluster~hysteresis_grp, scale="free_y") + 
+  theme(strip.text.y = element_text(size = 7)) + ylab("Rel. abundance\nscaled") +
+  geom_vline(xintercept = 31, linetype = 2)
+
+plot_grid(pp,g, ncol=2, rel_widths = c(2,1))
+
+```
 
 
 
