@@ -1101,7 +1101,7 @@ library(tidygraph)
 akk_cor%>%
   group_by(hysteresis_grp,variable) %>%
   summarise(n=n(), median=median(akk_cor), q25=quantile(akk_cor,0.25), q75 = quantile(akk_cor,0.75) ) %>%
-  filter(abs(median) > 0.25) %>%
+  filter(abs(median) > 0.4) %>%
   merge(.,akk_cor, by=c("hysteresis_grp","variable"), all.x=TRUE) %>%
   tidyr::separate(variable,into=c("Domain","Phylum","Class","Order","Family","Genus"),sep=";") %>%
   filter(Genus != "Other", Family != "D_5__uncultured") %>%
@@ -1142,7 +1142,7 @@ akk_cor%>%
   summarise(n=n(), median=median(akk_cor), q25=quantile(akk_cor,0.25), q75 = quantile(akk_cor,0.75) ) %>%
   mutate(direction = ifelse(median>0,"pos","neg")) %>%
   filter((direction == "pos" & q25 > 0)|(direction == "neg" & q75 < 0)) %>%
-  filter(abs(median) > 0.25) %>%
+  filter(abs(median) > 0.4) %>%
    tidyr::separate(variable,into=c("Domain","Phylum","Class","Order","Family","Genus"),sep=";") %>%
   mutate(Genus = ifelse(Family == "D_4__Prevotellaceae" & Genus == "D_5__uncultured","Prevotellaceae",Genus)) %>%
   mutate(Genus = ifelse(Family == "D_4__Ruminococcaceae" & Genus == "D_5__uncultured","Ruminococcaceae",Genus)) %>%
@@ -1171,9 +1171,11 @@ ggraph(., layout = 'kk') +
   theme_dark() + theme(axis.text.x = element_blank(), axis.text.y = element_blank(),
                        axis.ticks.x=element_blank(), axis.ticks.y=element_blank(),
                        strip.text.x = element_text(size = 20)) + 
-  xlab("") + ylab("") 
+  xlab("") + ylab("") -> akk_solo_plot
 
+akk_solo_plot
 
+ggsave("akk_solo_plot.pdf")
 
 ```
 
@@ -1205,7 +1207,7 @@ select_genera
 
 ### global network around Akkermansia
 
-```{r, fig.height=6, fig.width=20}
+```{r, fig.height=3, fig.width=10}
 
 select_genera = 
 
@@ -1283,18 +1285,23 @@ network_df_cor %>%
 edge.attributes(global_akk_net)$hysteresis_grp = edge.attributes(global_akk_net)$hysteresis_grp %>% factor(levels=c("resistant\nprofile","resilient\nprofile","no resilient\nprofile"))
 
 
+global_akk_net_plot =
+
 global_akk_net %>%
 ggraph(., layout = 'kk') + 
     geom_edge_link(aes(colour = median),alpha=0.5, width=0.5) + 
   facet_edges(~hysteresis_grp , nrow=1, labeller = my_lab) +   
-  geom_node_text(aes(label = name)) +
+  geom_node_text(aes(label = name),size=3) +
   scale_edge_colour_gradient2(low = "red", mid="yellow", high="green") +
   theme_dark() + theme(axis.text.x = element_blank(), axis.text.y = element_blank(),
                        axis.ticks.x=element_blank(), axis.ticks.y=element_blank(),
-                       strip.text.x = element_text(size = 20)) + 
+                       strip.text.x = element_text(size = 10),
+                       panel.grid.major = element_blank(), 
+                       panel.grid.minor = element_blank()) + 
   xlab("") + ylab("") 
 
-
+global_akk_net_plot
+ggsave("global_akk_net.pdf")
 
 ```
 
@@ -1441,6 +1448,11 @@ pp = genera_select_melt %>%
  #g=gridExtra::tableGrob(genus_cluster), theme=gridExtra::ttheme_minimal())
 
  
+mytheme <- gridExtra::ttheme_default(
+    core = list(fg_params=list(cex = 0.5)),
+    colhead = list(fg_params=list(cex = 0.5)),
+    rowhead = list(fg_params=list(cex = 0.5)))
+
  genus_cluster %>% 
 tibble::rownames_to_column("genus") %>% 
  tidyr::separate(genus,into=c("Domain","Phylum","Class","Order","Family","Genus"),sep=";") %>%
@@ -1454,9 +1466,9 @@ tibble::rownames_to_column("genus") %>%
    select(Genus,cluster) %>%
    mutate(Genus = Genus %>% gsub("D_5__","",.)) %>%
    arrange(cluster) %>%
-   gridExtra::tableGrob() -> g
+   gridExtra::tableGrob(theme = mytheme) -> genus_clusters_table
 
-pp = genera_select_melt %>%
+genus_dynamic_table = genera_select_melt %>%
   merge(.,genus_cluster, by.x="variable", by.y="row.names") %>%
   group_by(variable,Time) %>%
   mutate(value = (value+10^-6)  %>% log10() %>% scale() ) %>%
@@ -1466,7 +1478,25 @@ pp = genera_select_melt %>%
   theme(strip.text.y = element_text(size = 7)) + ylab("Rel. abundance\nscaled") +
   geom_vline(xintercept = 31, linetype = 2)
 
-plot_grid(pp,g, ncol=2, rel_widths = c(2,1))
+plot_grid(genus_dynamic_table,genus_clusters_table, ncol=2, rel_widths = c(2,1))
+
+```
+
+### global figure
+
+```{r, fig.height=12, fig.width=12}
+
+plot_grid(
+
+plot_grid(
+resilience_plot,
+histo_DSS_hysteresis_barplot, nrow=1, rel_widths = c(3,1)),
+plot_grid(NULL,global_akk_net_plot,NULL, rel_widths = c(0.3,4,1), nrow=1),
+plot_grid(genus_dynamic_table,
+genus_clusters_table, nrow=1, rel_widths = c(3,1)), nrow=3, rel_heights = c(1.5,1.5,3))
+
+ggsave("resilience_network_plot.pdf")
+
 
 ```
 
@@ -1475,7 +1505,7 @@ plot_grid(pp,g, ncol=2, rel_widths = c(2,1))
 
 ## import gro alpha data
 
-```{r}
+```{r, eval=FALSE, include=FALSE}
 GRO_alpha = readxl::read_excel("Multiplex_Richness_SDB_200318.xlsx", sheet = "Multiplex T41 T47", skip=2) %>%
   select(3,`Blood harvest Timepoint`,33) %>%
   filter(`Blood harvest Timepoint` == "T47") %>%
@@ -1494,7 +1524,7 @@ GRO_alpha %>%
 ```
 
 
-```{r}
+```{r, eval=FALSE, include=FALSE}
 
 GRO_alpha %>%
   merge(.,rat_metadata, by.x="Rat_ID", by.y="Animal_id_2") %>%
@@ -1580,6 +1610,25 @@ physio %>%
   ggplot() +  geom_histogram(aes(x=value+0.1, fill=dose%>%as.character)) + facet_wrap(~variable, scale="free") + scale_fill_brewer()
 
 
+
+physio %>%
+  mutate(Rat_ID = paste0("R",SUBJID)) %>%
+  merge(.,rat_metadata,by.x="Rat_ID",by.y="Animal_id_2") %>%
+  merge(.,hysteresis, by="Rat_ID") %>%
+  #filter(dose > 0.9| dose < 0.1) %>%
+  select(-SUBJID,-diet,-Cage_provider,-Animal.Identification,-Filiation,-Bacteroides,-Weight) %>%
+  melt(id.vars=c("Rat_ID","dose","Study_group","Animal_id","hysteresis_grp")) %>%
+  na.omit() %>%
+  mutate(DSS_group = ifelse(dose>=1,"High","Low")) %>%
+  mutate(Group = ifelse(dose>=1,hysteresis_grp%>%as.character,ifelse(dose>0,"Low DSS dose","Control\ngroup")) ) %>%
+  mutate(Group = Group %>% factor(levels = c("Control\ngroup","Low DSS dose","resistant\nprofile","resilient\nprofile","no resilient\nprofile")) ) %>%
+  ggplot() +  
+  #geom_histogram(aes(x=value+0.1, fill=Group)) + 
+  geom_boxplot(aes(y=value, fill=Group)) +
+  facet_wrap(~variable, scale="free") + scale_fill_brewer() + theme_dark()
+
+
+
 ```
 
 test physio parameters for bimodality
@@ -1657,8 +1706,35 @@ physio %>%
   #group_by(variable, hysteresis_grp) %>%
   #summarise(n = n(), m = mean(value), sem = sd(value)/sqrt(n())) %>%
   #ungroup() %>%
-  ggplot +  geom_violin(aes(x=hysteresis_grp,y=value)) + facet_wrap(~variable, scale="free_y")
-  
+  #ggplot +  geom_boxplot(aes(x=hysteresis_grp,y=value)) + facet_wrap(~variable, scale="free_y")
+  group_by(hysteresis_grp, variable) %>%
+  summarise(n = n(), m = mean(value), sem = sd(value)/sqrt(n())) %>%
+  ungroup() %>%
+  ggplot(aes(x=hysteresis_grp, y=m)) +
+  geom_bar(fill="white", stat="identity", position="dodge", color="black") + 
+  geom_errorbar(aes(ymin=m-sem,ymax=m+sem),width=.2, position=position_dodge(.9)) +
+  facet_wrap(~variable, scale="free_y")
+
+
+akk_df %>%
+  #filter(Study_group != "G2") %>%
+  select(hysteresis_grp,Study_group, Rat_ID) %>% 
+  unique %>%
+  merge(.,histo, by="Rat_ID") %>%
+  mutate(DSS_group = ifelse(Study_group == "G5" | Study_group == "G6" | Study_group == "G7", "high", "low" )) %>%
+  filter(DSS_group == "high") %>%
+  mutate(score_histo = as.numeric(as.character(score_histo))) %>%
+  group_by(hysteresis_grp) %>%
+  summarise(n = n(), m = mean(score_histo), sem = sd(score_histo)/sqrt(n())) %>%
+  ungroup() %>%
+  ggplot(aes(x=hysteresis_grp, y=m)) +
+  geom_bar(fill="white", stat="identity", position="dodge", color="black") + 
+  geom_errorbar(aes(ymin=m-sem,ymax=m+sem),width=.2, position=position_dodge(.9)) +
+  #scale_fill_brewer(type="qual") +
+  ylab("Histological score") +
+  xlab("") +
+  theme(legend.position = c(0.1, 0.9))
+
 
 
 ```
@@ -1678,7 +1754,7 @@ physio %>%
   filter(dose > 0.9) %>%
   dcast(Rat_ID+hysteresis_grp~variable, value.var="value") -> df
 
-df_pca = dudi.pca(df[-c(1,2)] %>% na.omit, scannf=F, nf=10)
+df_pca = ade4::dudi.pca(df[-c(1,2)] %>% na.omit, scannf=F, nf=10)
 
 bca(df_pca, fac = df %>% na.omit %>% .$hysteresis_grp, scannf=F, nf=2) %>% randtest()
 

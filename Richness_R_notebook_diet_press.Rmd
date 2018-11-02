@@ -1,0 +1,304 @@
+---
+title: "Richness R Notebook : diet press perturbation"
+output:
+  html_notebook: 
+    highlight: tango
+    author: Julien Tap
+    mathjax: null
+    theme: cerulean
+    toc: yes
+    toc_float: yes
+    code_folding: hide
+  html_document: default
+---
+
+
+
+```{r}
+
+Grp_color = c("#dfc27d","#a6bddb","#74a9cf","#3690c0","#0570b0","#045a8d","#023858")
+
+
+
+```
+
+
+
+
+
+## Loading 16S sequencing data and associated metadata
+
+here we start to load all R libraries and custom script (code not shown) with study data
+
+```{r loading_library1, message=FALSE, warning=FALSE, include=FALSE}
+
+Sys.setenv(PATH = paste("C:/Users/tapju/Documents/ImageMagick", Sys.getenv("PATH"), sep = ";"))
+library(BiotypeR)
+library(DirichletMultinomial)
+library(ggplot2)
+library(reshape2)
+library(ade4)
+library(vegan)
+library(dplyr)
+library(magrittr)
+library(forcats)
+library(GGally)
+source("https://raw.githubusercontent.com/tapj/IBSMicrobiota/master/R/mclapply.hack.R")
+library(stringr)
+library(broom)
+
+library(earlywarnings)
+library(gganimate)
+library(cowplot)
+library(microbiome)
+library(viridis)
+source("PlotPotential2.r")
+
+```
+
+```{r}
+
+rat_metadata = read.csv2("rat_metadata.csv")
+#mapping_file = read.table("qiime/result/Mapping_Richness1.txt", header=T, comment.char ="", dec=".", sep="\t")
+
+mapping_file = read.table("qiime/result/mapping_all_richness.txt", header=T, comment.char ="", dec=".", sep="\t")
+
+#rat_metadata$Animal_id_2 %<>% gsub("R","",.)
+
+genus = read.table("qiime/result/otus/summarize_taxa_through_plots_out/otu_table_non_chimeric_L6.txt", header=T, comment.char ="", dec=".", sep="\t", skip=1, row.names = 1, check.names = FALSE)
+
+otu   = read.table("qiime/result/otus/make_otu_table_out/otu_table_non_chimeric.tab",header=T, comment.char ="", dec=".", sep="\t", skip=1, row.names = 1, check.names = FALSE )
+
+colnames(mapping_file)[7] = "Time"
+
+
+mapping_file
+
+```
+
+
+```{r}
+
+observed_otu = otu[,-dim(otu)[2]] %>% t %>% vegan::rarefy(.,sample=25000)
+
+
+observed_otu %<>% as.matrix %>% as.data.frame %>% rename(S_obs = V1 )
+
+#genus %>% head
+
+```
+
+## alpha-diversity changes
+
+```{r}
+mapping_file %>%
+  merge(.,rat_metadata, by.x="Rat_ID", by.y="Animal_id_2") %>%
+  filter(Study_group == "G7") %>%
+  filter(Time %in% c("Tm1","Tm13","Tm20","Tm34","Tm41","Tm49","Tm7")) %>%
+  mutate(Time_days = gsub("Tm","-",Time) %>% as.character %>% as.numeric) %>%
+  mutate(Diet = ifelse(Time_days < -20, "M-Z (chow)","AIN93 (low fiber)")) %>%
+  merge(.,observed_otu, by.x="samplenr", by.y="row.names", all = FALSE) %>%
+  as_tibble %>%
+  mutate(Time = Time %>% as.character) %>%
+  #xtabs(~Time+Study_group, data = .) %>%
+  ggplot() + 
+  geom_line(aes(x=Time_days,y=S_obs, group=Rat_ID), linetype=2) +
+  geom_point(aes(x=Time_days,y=S_obs, col=Diet), size=5, alpha=0.5) +
+  xlab("Time (Days)") + ylab("Observed OTU\nafter reads rarefaction") -> pB_diet
+  
+pB_diet
+
+
+```
+
+## beta diversity changes
+```{r, message=FALSE, warning=FALSE}
+
+mapping_file %>%
+  merge(.,rat_metadata, by.x="Rat_ID", by.y="Animal_id_2") %>%
+  filter(Study_group == "G7") %>%
+  filter(Time %in% c("Tm1","Tm13","Tm20","Tm34","Tm41","Tm49","Tm7")) %>%
+  #mutate(Time_days = gsub("Tm","-",Time) %>% as.character %>% as.numeric) %>%
+  #mutate(Diet = ifelse(Time_days < -20, "M-Z (chow)","AIN93 (low fiber)")) %>%
+  #merge(.,observed_otu, by.x="samplenr", by.y="row.names", all = FALSE) %>%
+  pull(samplenr) -> select_samples
+  
+genus[,select_samples %>% as.character] %>%
+  BiotypeR::dist.JSD() -> genus_select_jsd
+
+genus_select_pco =  dudi.pco(genus_select_jsd, scannf = F, nf=3)
+
+mapping_file %>%
+  merge(.,rat_metadata, by.x="Rat_ID", by.y="Animal_id_2") %>%
+  filter(Study_group == "G7") %>%
+  filter(Time %in% c("Tm1","Tm13","Tm20","Tm34","Tm41","Tm49","Tm7")) %>%
+  mutate(Time_days = gsub("Tm","-",Time) %>% as.character %>% as.numeric) %>%
+  mutate(Diet = ifelse(Time_days < -20, "M-Z (chow)","AIN93 (low fiber)")) %>%
+  merge(.,observed_otu, by.x="samplenr", by.y="row.names", all = FALSE) %>%
+  merge(.,genus_select_pco$li,by.x="samplenr",by.y="row.names") %>%
+  ggplot() + geom_point(aes(x=A1,y=A2,col=Diet),size=4, alpha=0.5) + 
+  xlab("PC1") + ylab("PC2") -> pA_diet
+
+pA_diet
+
+
+
+
+```
+
+## genera changes
+
+
+
+### use DMM model to find genera drivers
+
+```{r}
+
+
+genus_stool.int.denoized =  round(noise.removal(genus, percent=1) * 30000)
+
+
+
+mapping_file %>%
+  merge(.,rat_metadata, by.x="Rat_ID", by.y="Animal_id_2") %>%
+  filter(Study_group == "G7") %>%
+  filter(Time %in% c("Tm1","Tm13","Tm20","Tm34","Tm41","Tm49","Tm7")) %>%
+  mutate(Time_days = gsub("Tm","-",Time) %>% as.character %>% as.numeric) %>%
+  mutate(Diet = ifelse(Time_days < -20, "M-Z (chow)","AIN93 (low fiber)")) %>%
+  merge(.,observed_otu, by.x="samplenr", by.y="row.names", all = FALSE) %>%
+  merge(.,t(genus_stool.int.denoized), by.x="samplenr", by.y="row.names") %>%
+  .[,-c(1:21)] -> genus_stool.int.denoized.diet
+  
+
+
+
+
+
+fit_genus_list_diet = vector("list",5)
+
+if(!file.exists("fit_genus_list3_diet.rda")) { #check if fit_genus_list.rda exist
+#fit_genus <- mclapply(1:6, dmn, count=t(genus.count), verbose=TRUE)
+
+set.seed(444); seeds=sample(1:1000, 5)
+
+  for(i in 1:5) {
+    set.seed(seeds[i])
+    fit_genus_diet <- mclapply(1:5, dmn, count=genus_stool.int.denoized.diet %>% as.matrix, verbose=TRUE)
+    fit_genus_list_diet[[i]] = fit_genus_diet
+  }
+  #save(fit_genus, file=("../inst/extData/fit_genus.rda"))
+  save(fit_genus_list_diet, file=("fit_genus_list3_diet.rda"))
+
+} else {load("fit_genus_list3_diet.rda")}
+
+
+
+
+
+lplc_diet = vector("list",5)
+
+for(i in 1:5) {
+  lplc_diet[[i]] <- sapply(fit_genus_list_diet[[i]], function(x){attr(x,"goodnessOfFit")[["Laplace"]]})
+}
+
+(best_genus <- fit_genus_list_diet[[5]][[which.min(lplc_diet[[1]])]])
+#best_genus <- fit_genus_list_diet[[1]][[11]] # true one
+
+#best_genus <- fit_genus_list[[1]][[6]] # ideal one
+
+
+#bic_results=melt(data.frame(sapply(fit_genus_list[1:5], sapply, BIC), nb.clust=1:15), id.vars="nb.clust")
+laplace_results=melt(data.frame(sapply(fit_genus_list_diet[1:5], sapply, laplace), nb.clust=1:5), id.vars="nb.clust")
+
+#p1_bic = ggplot(bic_results) + geom_line(aes(x=nb.clust, y=value, group=variable)) + ylab("BIC") + xlab("Number of clusters")
+p2_laplace_diet = ggplot(laplace_results) + geom_line(aes(x=nb.clust, y=value, group=variable)) + ylab("Laplace") + xlab("Number of clusters")
+
+#p1_bic + theme_bw() 
+p2_laplace_diet + theme_bw() # to complete this task but K = 5
+
+#par(mar=c(1,1,1,10))
+#DirichletMultinomial::heatmapdmn(fit1=fit_genus_list_diet[[1]][[1]], fitN=best_genus, count=genus_stool.int.denoized.diet %>% as.matrix)
+
+
+p0 <- fitted(fit_genus_list_diet[[1]][[1]], scale=TRUE)     # scale by theta
+p2 <- fitted(best_genus, scale=TRUE)
+
+colnames(p2) <- paste("m", 1:2, sep="")
+
+(meandiff <- colSums(abs(p2 - as.vector(p0))))
+
+diff <- rowSums(abs(p2 - as.vector(p0)))
+
+o <- order(diff, decreasing=TRUE)
+cdiff <- cumsum(diff[o]) / sum(diff)
+head(cbind(Mean=p0[o], p2[o,], diff=diff[o], cdiff), 10) %>% as.data.frame
+                               
+
+
+
+```
+
+
+
+
+
+
+### show significant genera
+
+
+
+```{r}
+idx=c(
+  grep("D_4__Prevotellaceae;D_5__uncultured",row.names(genus)),
+  grep("D_4__Lachnospiraceae;D_5__Blautia",row.names(genus)),
+  grep("D_4__Verrucomicrobiaceae;D_5__Akkermansia",row.names(genus)),
+  grep("D_4__S24-7;D_5__uncultured",row.names(genus))
+  
+)
+
+
+mapping_file %>%
+  merge(.,rat_metadata, by.x="Rat_ID", by.y="Animal_id_2") %>%
+  filter(Study_group == "G7") %>%
+  filter(Time %in% c("Tm1","Tm13","Tm20","Tm34","Tm41","Tm49","Tm7")) %>%
+  mutate(Time_days = gsub("Tm","-",Time) %>% as.character %>% as.numeric) %>%
+  mutate(Diet = ifelse(Time_days < -20, "M-Z (chow)","AIN93 (low fiber)")) %>%
+  merge(.,observed_otu, by.x="samplenr", by.y="row.names", all = FALSE) %>%
+  merge(.,t(genus[idx,select_samples %>% as.character]), by.x="samplenr", by.y="row.names") %>%
+  select(Rat_ID,Diet,Time_days,contains("Bacteria")) %>%
+  melt(id.vars=c("Rat_ID","Time_days","Diet")) %>%
+  mutate(
+    variable = variable %>% 
+      as.character %>% 
+      gsub("D_5__","",.) %>%
+      gsub("D_4__","",.) %>%
+      str_split_fixed(.,pattern=";",6) %>%  .[,5:6] %>% apply(1,function(x){paste(x[1],x[2])}) %>% gsub(" ","\n",.)
+      ) %>%
+  ggplot() + geom_point(aes(x=Time_days, y=value+10^-6, col=Diet)) +
+  geom_smooth(aes(x=Time_days, y=value+10^-6,group=variable),col="grey") +
+  scale_y_log10() + #scale_color_brewer("", type="qual") + 
+  facet_wrap(~variable , scales="free_y", ncol=2) + 
+  xlab("Time (days)") + ylab("rel. abundance") -> pC_diet
+
+pC_diet
+
+
+
+```
+
+
+```{r, fig.height=6, fig.width=12}
+
+
+plot_grid(
+  plot_grid(
+    pA_diet+guides(color=FALSE) + scale_color_manual(values=Grp_color[1:2]),
+    pB_diet+guides(color=FALSE)+ scale_color_manual(values=Grp_color[1:2]),
+    nrow=2,rel_heights =   c(2,2), labels = c("A","B")), 
+  pC_diet+ scale_color_manual(values=Grp_color[1:2]),
+  ncol=2, rel_widths = c(2,3), labels = c(NA,"C")
+  )
+
+ggsave("Figure_diet_switch.pdf")
+
+```
