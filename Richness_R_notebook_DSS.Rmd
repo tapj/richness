@@ -170,7 +170,16 @@ pD_Sobs
 genus_jsd = genus[, select_DSS_samples %>% as.character] %>%
   dist.JSD()
 
+genus_bc =  genus %>% BiotypeR::noise.removal(percent=0.1) %>% t %>% vegan::vegdist() %>% as.matrix %>% as.dist
+
+
 genus_pco = dudi.pco(genus_jsd, scannf=F, nf=3)
+
+
+genus_pco_bc = dudi.pco(genus_bc, scannf=F, nf=3)
+
+
+#TO DO : distance vs baseline plot
 
 ```
 
@@ -190,10 +199,43 @@ mapping_file %>%
   theme_dark()
   
   
+mapping_file %>%
+  merge(.,rat_metadata,by.x="Rat_ID",by.y="Animal_id_2") %>%
+  select(Rat_ID,samplenr,Time,DSS,Study_group) %>%
+  filter(Study_group != "G1") %>%
+  mutate(Time_days = Time %>% gsub("Tm","-", .) %>% gsub("T","",.) %>% as.character %>% as.numeric) %>% filter(Time_days >= -1) %>% 
+  filter(Time != "T47") %>%
+  merge(., genus_pco_bc$li, by.x="samplenr", by.y="row.names") %>%
+  ggplot() + geom_point(aes(x=A1,y=A2,col=Study_group)) + 
+  scale_color_brewer() +
+  facet_wrap(~Time_days, ncol=2) +
+  theme_dark()
   
+  genus_jsd_melt = genus_jsd %>% broom::tidy()
   
-  
+```
 
+
+
+```{r}
+  
+  
+    
+mapping_file %>%
+  merge(.,rat_metadata,by.x="Rat_ID",by.y="Animal_id_2") %>%
+  select(Rat_ID,samplenr,Time,DSS,Study_group) %>%
+  filter(Study_group != "G1") %>%
+  mutate(Time_days = Time %>% gsub("Tm","-", .) %>% gsub("T","",.) %>% as.character %>% as.numeric) %>% filter(Time_days >= -8) %>% 
+  filter(Time != "T47") %>%
+  merge(genus_jsd %>% as.matrix %>% melt(), by.x="samplenr", by.y="Var1") %>%
+  merge(., mapping_file %>%
+  merge(.,rat_metadata,by.x="Rat_ID",by.y="Animal_id_2") %>%
+  select(Rat_ID,samplenr,Time,DSS,Study_group) %>%
+  filter(Study_group != "G1") %>%
+  mutate(Time_days = Time %>% gsub("Tm","-", .) %>% gsub("T","",.) %>% as.character %>% as.numeric) %>% filter(Time_days >= -8) %>% 
+  filter(Time != "T47") , by.x="Var2", by.y="samplenr") %>%
+  filter(Time_days.x == -7, Rat_ID.x == Rat_ID.y) %>%
+  ggplot() + geom_boxplot(aes(x=Time_days.y %>% as.character, y=value)) + facet_wrap(~Study_group.y)
 
 
 
@@ -1068,7 +1110,7 @@ akk_cor%>%
   summarise(n=n(), median=median(akk_cor), q25=quantile(akk_cor,0.25), q75 = quantile(akk_cor,0.75) ) %>%
   mutate(direction = ifelse(median>0,"pos","neg")) %>%
   filter((direction == "pos" & q25 > 0)|(direction == "neg" & q75 < 0)) %>%
-  #filter(abs(median) > 0.25) %>%
+  filter(abs(median) > 0.4) %>%
   merge(.,akk_cor, by=c("hysteresis_grp","variable"), all.x=TRUE) %>%
   tidyr::separate(variable,into=c("Domain","Phylum","Class","Order","Family","Genus"),sep=";") %>%
   filter(Genus != "Other", Family != "D_5__uncultured") %>%
@@ -1290,7 +1332,7 @@ global_akk_net_plot =
 global_akk_net %>%
 ggraph(., layout = 'kk') + 
     geom_edge_link(aes(colour = median),alpha=0.5, width=0.5) + 
-  facet_edges(~hysteresis_grp , nrow=1, labeller = my_lab) +   
+  facet_edges(~hysteresis_grp , nrow=1) +   
   geom_node_text(aes(label = name),size=3) +
   scale_edge_colour_gradient2(low = "red", mid="yellow", high="green") +
   theme_dark() + theme(axis.text.x = element_blank(), axis.text.y = element_blank(),
@@ -1541,10 +1583,18 @@ GRO_alpha %>%
 
 ## import all physio parameters
 ```{r, message=FALSE, warning=FALSE}
+readr::read_csv2("Data_All.csv") %>% colnames
+
+
 physio = 
-readr::read_csv2("Data_All.csv") %>%
-  select(SUBJID,diet,dose,weight_colon,length_colon,Lipocalin_T40_pg_mL,Lipocalin_T69_pg_mL,Total_distal,Total_proximal,Total_proximal,Crypt_diameter_distal,Crypt_height_distal,
-         Goblet_cell_number_distal,Crypt_height_proximal,Crypt_diameter_proximal,Goblet_cell_number_proximal) %>%
+readr::read_csv2("Data_All.csv") %>% select(-USUBJID,-round,-dose_diet) %>%
+  # select(SUBJID,diet,dose,weight_colon,length_colon,Lipocalin_T40_pg_mL,Lipocalin_T69_pg_mL,
+  #        Total_distal,Total_proximal,Total_proximal,Crypt_diameter_distal,Crypt_height_distal,
+  #        Goblet_cell_number_distal,Crypt_height_proximal,Crypt_diameter_proximal,Goblet_cell_number_proximal,
+  #        BW_D3_diffp_D0,BW_D17_diffp_D14,BW_D31_diffp_D28,
+  #        Edema_distal,Mucosa_hyperplasia_distal,Epithelial_atrophy_distal,
+  #        Ulceration_distal,Cryptic_abcess_distal,Intestinal_wall_thickness_distal,
+  #        Squamous_metaplasia_distal,Polyps_distal,Mononuclear_cell_infiltration_distal,Neutrophils_infiltration_distal) %>%
   filter(diet != "AIN-93G")
 
 physio
@@ -1627,7 +1677,7 @@ physio %>%
   geom_boxplot(aes(y=value, fill=Group)) +
   facet_wrap(~variable, scale="free") + scale_fill_brewer() + theme_dark()
 
-
+ggsave("physio_resilience.pdf")
 
 ```
 
@@ -1716,6 +1766,8 @@ physio %>%
   facet_wrap(~variable, scale="free_y")
 
 
+
+
 akk_df %>%
   #filter(Study_group != "G2") %>%
   select(hysteresis_grp,Study_group, Rat_ID) %>% 
@@ -1740,6 +1792,84 @@ akk_df %>%
 ```
 
 
+```{r, fig.height=4, fig.width=8}
+
+
+physio %>%
+  mutate(Rat_ID = paste0("R",SUBJID)) %>%
+  merge(.,rat_metadata,by.x="Rat_ID",by.y="Animal_id_2") %>%
+  select(-SUBJID,-diet,-Cage_provider,-Animal.Identification,-Filiation,-Bacteroides,-Weight) %>%
+  melt(id.vars=c("Rat_ID","dose","Study_group","Animal_id")) %>%
+  na.omit() %>%
+  #merge(.,hysteresis, by="Rat_ID") %>%
+  #filter(dose > 0.9) %>%
+  #group_by(variable, hysteresis_grp) %>%
+  #summarise(n = n(), m = mean(value), sem = sd(value)/sqrt(n())) %>%
+  #ungroup() %>%
+  #ggplot +  geom_boxplot(aes(x=hysteresis_grp,y=value)) + facet_wrap(~variable, scale="free_y")
+  group_by(dose, variable) %>%
+  summarise(n = n(), m = mean(value), sem = sd(value)/sqrt(n())) %>%
+  ungroup() %>%
+  ggplot(aes(x=dose %>% as.character, y=m)) +
+  geom_bar(fill="white", stat="identity", position="dodge", color="black") + 
+  geom_errorbar(aes(ymin=m-sem,ymax=m+sem),width=.1, position=position_dodge(.9)) +
+  facet_wrap(~variable, scale="free_y") + xlab("DSS Dose") + ylab("parameter value")
+
+
+physio %>%
+  mutate(Rat_ID = paste0("R",SUBJID)) %>%
+  merge(.,rat_metadata,by.x="Rat_ID",by.y="Animal_id_2") %>%
+  select(-SUBJID,-diet,-Cage_provider,-Animal.Identification,-Filiation,-Bacteroides,-Weight) %>%
+  mutate(`Body_weigth_dynamics\n(3 DSS pusles)` = BW_D3_diffp_D0 + BW_D17_diffp_D14 + BW_D31_diffp_D28) %>%
+  melt(id.vars=c("Rat_ID","dose","Study_group","Animal_id")) %>%
+  filter(variable %in% c("length_colon","Total_distal","Body_weigth_dynamics\n(3 DSS pusles)")) %>%
+  na.omit() %>%
+  #merge(.,hysteresis, by="Rat_ID") %>%
+  #filter(dose > 0.9) %>%
+  #group_by(variable, hysteresis_grp) %>%
+  #summarise(n = n(), m = mean(value), sem = sd(value)/sqrt(n())) %>%
+  #ungroup() %>%
+  #ggplot +  geom_boxplot(aes(x=hysteresis_grp,y=value)) + facet_wrap(~variable, scale="free_y")
+  group_by(dose, variable) %>%
+  summarise(n = n(), m = mean(value), sem = sd(value)/sqrt(n())) %>%
+  ungroup() %>%
+  ggplot(aes(x=dose %>% as.character, y=m)) +
+  geom_bar(fill="white", stat="identity", position="dodge", color="black") + 
+  geom_errorbar(aes(ymin=m-sem,ymax=m+sem),width=.1, position=position_dodge(.9)) +
+  facet_wrap(~variable, scale="free_y") + xlab("DSS Dose") + ylab("parameter value")
+
+physio %>%
+  mutate(Rat_ID = paste0("R",SUBJID)) %>%
+  merge(.,rat_metadata,by.x="Rat_ID",by.y="Animal_id_2") %>%
+  select(-SUBJID,-diet,-Cage_provider,-Animal.Identification,-Filiation,-Bacteroides,-Weight) %>%
+  mutate(`Body_weigth_dynamics` = BW_D3_diffp_D0 + BW_D17_diffp_D14 + BW_D31_diffp_D28) %>%
+  rename(`colon length\n(cm)` = length_colon, 
+         `distal\nhistological score` = Total_distal, 
+         `Body weight variations\nduring the 3 DSS pulses\n(gram)` = Body_weigth_dynamics) %>%
+  melt(id.vars=c("Rat_ID","dose","Study_group","Animal_id")) %>%
+  filter(variable %in% c("colon length\n(cm)","distal\nhistological score","Body weight variations\nduring the 3 DSS pulses\n(gram)")) %>%
+  #filter(variable %in% c("length_colon","Total_distal","Body_weigth_dynamics\n(3 DSS pusles)")) %>%
+  na.omit() %>%
+  #merge(.,hysteresis, by="Rat_ID") %>%
+  #filter(dose > 0.9) %>%
+  #group_by(variable, hysteresis_grp) %>%
+  #summarise(n = n(), m = mean(value), sem = sd(value)/sqrt(n())) %>%
+  #ungroup() %>%
+  #ggplot +  geom_boxplot(aes(x=hysteresis_grp,y=value)) + facet_wrap(~variable, scale="free_y")
+  #group_by(dose, variable) %>%
+  ggplot(aes(x=dose %>% as.character, y=value)) +
+  geom_boxplot(aes(fill=dose%>% as.character)) + 
+  scale_fill_manual(values = Grp_color[-1]) + guides(fill=FALSE) +
+  facet_wrap(~variable, scale="free_y") + xlab("DSS Dose (%)") + ylab("parameter value") -> p_physio
+
+save(p_physio, file="p_physio.rda")
+
+p_physio
+
+
+```
+
+
 analyse interclass
 ```{r}
 
@@ -1756,7 +1886,12 @@ physio %>%
 
 df_pca = ade4::dudi.pca(df[-c(1,2)] %>% na.omit, scannf=F, nf=10)
 
-bca(df_pca, fac = df %>% na.omit %>% .$hysteresis_grp, scannf=F, nf=2) %>% randtest()
+#bca(df_pca, fac = df %>% na.omit %>% .$hysteresis_grp, scannf=F, nf=2) %>% randtest()
+
+
+cbind(df %>% na.omit,df_pca$li) %>%
+  ggplot() + geom_point(aes(x=Axis1,y=Axis2,col=hysteresis_grp))
+
 
 
 
