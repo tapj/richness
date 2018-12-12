@@ -83,6 +83,7 @@ mapping_file
 observed_otu = otu[,-dim(otu)[2]] %>% t %>% vegan::rarefy(.,sample=25000)
 
 
+
 observed_otu %<>% as.matrix %>% as.data.frame %>% rename(S_obs = V1 )
 
 #genus %>% head
@@ -113,6 +114,74 @@ pB_diet
 
 ```
 
+
+### disapearing OTU
+
+```{r, fig.height=5, fig.width=7, message=FALSE, warning=FALSE}
+
+mapping_file %>%
+  merge(.,rat_metadata, by.x="Rat_ID", by.y="Animal_id_2") %>%
+  filter(Study_group == "G7") %>%
+  filter(Time %in% c("Tm1","Tm13","Tm20","Tm34","Tm41","Tm7")) %>% #do not select -49
+  #filter(Time_days > -49) %>%
+  #mutate(Time_days = gsub("Tm","-",Time) %>% as.character %>% as.numeric) %>%
+  #mutate(Diet = ifelse(Time_days < -20, "M-Z (chow)","AIN93 (low fiber)")) %>%
+  #merge(.,observed_otu, by.x="samplenr", by.y="row.names", all = FALSE) %>%
+  pull(samplenr) -> select_samples
+
+otu[,-dim(otu)[2]] %>% 
+  t %>% 
+  vegan::rrarefy(.,sample=25000) %>%
+  t %>%
+  .[,select_samples %>% as.character()] %>%
+  as.data.frame %>%
+  tibble::rownames_to_column("OTU_ID") %>%
+  reshape2::melt(id.vars="OTU_ID") -> otu_melt
+  
+
+
+mapping_file %>%
+  merge(.,rat_metadata, by.x="Rat_ID", by.y="Animal_id_2") %>%
+  filter(Study_group == "G7") %>%
+  filter(Time %in% c("Tm1","Tm13","Tm20","Tm34","Tm41","Tm49","Tm7")) %>%
+  mutate(Time_days = gsub("Tm","-",Time) %>% as.character %>% as.numeric) %>%
+  mutate(Diet = ifelse(Time_days < -20, "M-Z (chow)","AIN93 (low fiber)")) %>%
+  filter(Time_days > -49) %>%
+  merge(.,otu_melt, by.x="samplenr", by.y="variable") %>%
+  mutate(value = value/25000) %>%
+  group_by(OTU_ID,Diet) %>%
+  summarize(s=sum(value), n=n()) %>%
+  mutate(value= (s)/n) %>%
+  reshape2::dcast(OTU_ID~Diet, value.var = "value") %>%
+  filter(`AIN93 (low fiber)` > 0 | `M-Z (chow)` > 0) %>%
+  ggplot() + geom_point(aes(x=`AIN93 (low fiber)`, `M-Z (chow)`, col= `AIN93 (low fiber)` < 0.0001 & `M-Z (chow)` > 0.0001  )) + 
+  scale_x_continuous(trans="sqrt", limits=c(0,0.16)) + 
+  scale_y_continuous(trans="sqrt",limits=c(0,0.16)) +
+  scale_color_manual("swapped OTU\nby diet",values = c("black","red"))
+  
+  
+mapping_file %>%
+  merge(.,rat_metadata, by.x="Rat_ID", by.y="Animal_id_2") %>%
+  filter(Study_group == "G7") %>%
+  filter(Time %in% c("Tm1","Tm13","Tm20","Tm34","Tm41","Tm49","Tm7")) %>%
+  mutate(Time_days = gsub("Tm","-",Time) %>% as.character %>% as.numeric) %>%
+  mutate(Diet = ifelse(Time_days < -20, "M-Z (chow)","AIN93 (low fiber)")) %>%
+  filter(Time_days > -49) %>%
+  merge(.,otu_melt, by.x="samplenr", by.y="variable") %>%
+  mutate(value = value/25000) %>%
+  group_by(OTU_ID,Diet) %>%
+  summarize(s=sum(value), n=n()) %>%
+  mutate(value= (s)/n) %>%
+  reshape2::dcast(OTU_ID~Diet, value.var = "value") %>%
+  filter(`AIN93 (low fiber)` > 0 | `M-Z (chow)` > 0) %>%
+  filter(`AIN93 (low fiber)` < 0.0001 & `M-Z (chow)` > 0.0001) %>%
+  arrange(desc(`M-Z (chow)`)) %>% 
+  head(20) %>%
+  merge(.,otu[,c(1,dim(otu)[2])], by.x="OTU_ID", by.y="row.names") %>%
+  select(-`163462`)
+
+
+```
 
 
 

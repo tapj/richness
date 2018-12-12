@@ -56,3 +56,32 @@ ggsave("Figure1.pdf",h=12,w=12)
 
 ```
 
+
+## Supplementary Figure 1
+
+- Data on the impact of diet on microbiota (species/ composition) =>  faire apparaitre les OTU qui disparaissent (poissblement dans la légende de la figure)
+- Enlever le point -50 (@Julien)
+
+
+```{r, fig.height=5, fig.width=12, message=FALSE, warning=FALSE}
+
+cowplot::plot_grid(
+pA_diet + scale_color_manual(values=Grp_color[1:2]) + guides(color=FALSE),
+pC_diet + scale_color_manual(values=Grp_color[1:2]), labels="AUTO", rel_widths = c(1.1,2)
+)
+
+ggsave("Supp_Figure1.pdf",h=5,w=12)
+
+
+#most of OTU disaparing fall into discriminating genus
+
+
+```
+
+
+
+
+
+
+
+
