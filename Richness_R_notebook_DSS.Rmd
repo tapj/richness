@@ -184,6 +184,138 @@ genus_pco_bc = dudi.pco(genus_bc, scannf=F, nf=3)
 ```
 
 
+### distance vs baseline
+```{r, fig.height=6, fig.width=12, message=FALSE, warning=FALSE}
+
+
+
+
+mapping_file %>%
+  merge(.,rat_metadata,by.x="Rat_ID",by.y="Animal_id_2") %>%
+  select(Rat_ID,samplenr,Time,DSS,Study_group) %>%
+  filter(Study_group != "G1") %>%
+  mutate(Time_days = Time %>% gsub("Tm","-", .) %>% gsub("T","",.) %>% as.character %>% as.numeric) %>% filter(Time_days >= -7 ) %>% 
+  filter(Time != "T47") %>%
+  merge(.,genus_pco$li, by.x="samplenr", by.y="row.names") -> selected_metadata_DSS
+
+plot(1:10)
+
+genus_jsd %>%
+  as.matrix() %>%
+  reshape2::melt() %>%
+  merge(.,selected_metadata_DSS %>% select(-A1,-A2,-A3), by.x="Var1", by.y="samplenr") %>%
+  merge(.,selected_metadata_DSS %>% select(-A1,-A2,-A3), by.x="Var2", by.y="samplenr") %>%
+  filter(Rat_ID.x == Rat_ID.y ) %>%
+  mutate(Step  =  
+           
+           case_when(
+             Time_days.x == -7 & Time_days.y == -1 ~  "Water",
+             Time_days.x == -1 & Time_days.y == 3 ~  "DSS",
+             Time_days.x == 13 & Time_days.y == 17 ~  "DSS",
+             Time_days.x == 27 & Time_days.y == 31 ~  "DSS",
+             Time_days.x == 3 & Time_days.y == 13 ~  "Water",
+             Time_days.x == 17 & Time_days.y == 27 ~  "Water",
+             Time_days.x == 31 & Time_days.y == 40 ~  "Water",
+             Time_days.x == 40 & Time_days.y == 68 ~  "Water")
+         ) %>%
+  mutate(days  =  
+           
+           case_when(
+             Time_days.x == -7 & Time_days.y == -1 ~  0,
+             Time_days.x == -1 & Time_days.y == 3 ~  3,
+             Time_days.x == 13 & Time_days.y == 17 ~  17,
+             Time_days.x == 27 & Time_days.y == 31 ~  31,
+             Time_days.x == 3 & Time_days.y == 13 ~  13,
+             Time_days.x == 17 & Time_days.y == 27 ~  27,
+             Time_days.x == 31 & Time_days.y == 40 ~  40,
+             Time_days.x == 40 & Time_days.y == 68 ~  68)
+         ) %>%
+  filter(!is.na(Step)) %>%
+  filter(Study_group.y %in% c("G2","G3","G4","G5","G6","G7")) %>%
+   group_by(Study_group.y,Step,days,Time_days.x, Time_days.y) %>%
+  summarize(m=1-median(value), q25=1-quantile(value,0.25), q75=1-quantile(value,0.75) ) %>%
+  
+  ggplot() + 
+  geom_line(aes(x=days  , y=m, group=Study_group.y, col=Study_group.y), size=3) +
+  geom_line(aes(x=days  , y=q25, group=Study_group.y, col=Study_group.y), linetype=2  ) +
+  geom_line(aes(x=days  , y=q75, group=Study_group.y, col=Study_group.y), linetype=2) +
+ 
+  
+  geom_hline(yintercept = 1-0.19, col="grey", alpha=0.5, size=3) +
+  geom_rect(aes(xmin=Time_days.x,xmax=Time_days.y, fill=Step), alpha=0.2, ymin=-Inf, ymax=+Inf) +
+  
+  #geom_vline(xintercept = c(1:8) ,  col=rep(c("blue","red","blue","red","blue","red","blue","blue"),6),  alpha=0.1, size=10) +
+   facet_wrap(~Study_group.y) + scale_fill_manual(values=c("Red","Blue")) + 
+  guides(col=FALSE) + ylab("Microbiota Stability\n(1-JSD per step)") + xlab("Study steps")
+  
+  
+ggsave("Figure_jsd_stability_DSS.pdf", h=6, w=12)
+
+
+
+
+genus_jsd %>%
+  as.matrix() %>%
+  reshape2::melt() %>%
+  merge(.,selected_metadata_DSS %>% select(-A1,-A2,-A3), by.x="Var1", by.y="samplenr") %>%
+  merge(.,selected_metadata_DSS %>% select(-A1,-A2,-A3), by.x="Var2", by.y="samplenr") %>%
+  filter(Rat_ID.x == Rat_ID.y ) %>%
+  mutate(Step  =  
+           
+           case_when(
+             Time_days.x == -7 & Time_days.y == -1 ~  "Water",
+             Time_days.x == -1 & Time_days.y == 3 ~  "DSS",
+             Time_days.x == 13 & Time_days.y == 17 ~  "DSS",
+             Time_days.x == 27 & Time_days.y == 31 ~  "DSS",
+             Time_days.x == 3 & Time_days.y == 13 ~  "Water",
+             Time_days.x == 17 & Time_days.y == 27 ~  "Water",
+             Time_days.x == 31 & Time_days.y == 40 ~  "Water",
+             Time_days.x == 40 & Time_days.y == 68 ~  "Water")
+         ) %>%
+  mutate(days  =  
+           
+           case_when(
+             Time_days.x == -7 & Time_days.y == -1 ~  0,
+             Time_days.x == -1 & Time_days.y == 3 ~  3,
+             Time_days.x == 13 & Time_days.y == 17 ~  17,
+             Time_days.x == 27 & Time_days.y == 31 ~  31,
+             Time_days.x == 3 & Time_days.y == 13 ~  13,
+             Time_days.x == 17 & Time_days.y == 27 ~  27,
+             Time_days.x == 31 & Time_days.y == 40 ~  40,
+             Time_days.x == 40 & Time_days.y == 68 ~  68)
+         ) %>%
+  filter(!is.na(Step)) %>%
+  merge(.,hysteresis, by.x="Rat_ID.x", by.y="Rat_ID") %>%
+  filter(Study_group.y %in% c("G2","G5","G6","G7")) %>%
+  mutate(hysteresis_grp = ifelse(Study_group.y == "G2","control (DSS 0%)",hysteresis_grp %>% as.character)) %>%
+  group_by(hysteresis_grp,Step,days,Time_days.x, Time_days.y) %>%
+  summarize(m=1-median(value), q25=1-quantile(value,0.25), q75=1-quantile(value,0.75) ) %>%
+  
+  ggplot() + 
+  geom_line(aes(x=days  , y=m, group=hysteresis_grp, col=hysteresis_grp), size=3) +
+  geom_line(aes(x=days  , y=q25, group=hysteresis_grp, col=hysteresis_grp), linetype=2  ) +
+  geom_line(aes(x=days  , y=q75, group=hysteresis_grp, col=hysteresis_grp), linetype=2) +
+ 
+  geom_hline(yintercept = 1-0.19, col="grey", alpha=0.5, size=3) +
+  #geom_vline(aes(xintercept = days-1) ,  col=rep(c("blue","red","blue","red","blue","red","blue","blue"),4),  alpha=0.1, size=3) +
+  geom_rect(aes(xmin=Time_days.x,xmax=Time_days.y, fill=Step), alpha=0.2, ymin=-Inf, ymax=+Inf) +
+   #theme(axis.text.x = element_text(hjust =0.5)) +
+   facet_wrap(~hysteresis_grp) +
+  scale_fill_manual(values=c("Red","Blue")) +
+  guides(col=FALSE) + ylab("Microbiota Stability\n(1- JSD per step)") + xlab("Days") 
+
+ggsave("Figure_jsd_stability_resilience.pdf", h=6, w=12)
+
+
+
+
+
+
+```
+
+
+
+
 ```{r, fig.height=8, fig.width=5}
 
 mapping_file %>%
@@ -268,7 +400,14 @@ mapping_file %>%
   
   pA_akk
 
-mapping_file %>%
+```
+
+### plot akk and PCoA
+```{r}
+
+PD_akk_PCoA_plot =
+
+  mapping_file %>%
   merge(.,rat_metadata,by.x="Rat_ID",by.y="Animal_id_2") %>%
   select(Rat_ID,samplenr,Time,DSS,Study_group) %>%
   filter(Study_group != "G1") %>%
@@ -286,8 +425,7 @@ mapping_file %>%
   xlab("PCo1 (JSD based)") + ylab("Akkermansia\nrel. abund.") + scale_y_continuous(labels=scales::percent)
 
 
-
-
+PD_akk_PCoA_plot
 ```
 
 
@@ -517,12 +655,17 @@ pC_Akk
 ```
 
 
+
+
 ```{r, fig.height=8, fig.width=14}
 
 
   plot_grid(pD_Sobs,pB_akk,pA_akk,pC_Akk, ncol=2,labels = c("A","B","C","D"), rel_heights = c(2,2))
 
 ggsave("Figure_early_warnings_signal.pdf")
+
+
+
 
 
 ```
