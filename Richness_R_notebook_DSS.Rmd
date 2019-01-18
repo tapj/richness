@@ -655,6 +655,47 @@ pC_Akk
 ```
 
 
+```{r}
+
+
+library(ggridges)
+
+
+mapping_file %>%
+  merge(.,rat_metadata,by.x="Rat_ID",by.y="Animal_id_2") %>%
+  select(Rat_ID,samplenr,Time,DSS,Study_group) %>%
+  filter(Study_group != "G1") %>%
+  mutate(Time_days = Time %>% gsub("Tm","-", .) %>% gsub("T","",.) %>% as.character %>% as.numeric) %>% filter(Time_days >= -8) %>% 
+  filter(Time != "T47") %>%
+  mutate(DSS = Study_group %>% forcats::fct_recode(`0` = "G2",`0.25` = "G3",`0.5` = "G4",`1` = "G5",`2` = "G6",`3` = "G7") %>% as.character %>% as.numeric ) %>%
+  merge(.,t(genus[, select_DSS_samples %>% as.character]), by.x="samplenr", by.y="row.names") %>%
+  select(contains("Akkermansia"),contains("D_5__Ruminococcus"),contains("Phascolarctobacterium"),contains("D_4__Christensenellaceae;D_5__uncultured"),DSS,Time_days, Rat_ID) %>%
+  mutate(DSS_group = ifelse(DSS>=1,"High dose (DSS >= 1%)","No or Low dose (DSS < 1%)")) %>%
+  #filter(DSS ==0) %>%
+  rename_at(1, ~"Akkermansia") %>%
+  rename_at(2, ~"Ruminococcus") %>%
+  rename_at(3, ~"Phascolarctobacterium") %>%
+  rename_at(4, ~"Christensenellaceae") %>%
+ggplot() + #geom_point(aes(x=Akkermansia,y=Time_days))
+  geom_density_ridges_gradient(aes(x=Akkermansia + 10^-6, y=reorder(Time_days %>% as.character,-Time_days), fill=..x..)) + 
+  #geom_density(aes(x=Bifidobacterium + 10^-6, fill=cat_age_val)) +
+  
+  facet_wrap(~DSS_group, scales ="free_y", ncol=4) +
+  
+  geom_vline(xintercept = 0.009129289, col="red", size=1, alpha = 0.75, linetype=3) +
+  guides(fill=FALSE) +
+  xlab("Akkermansia") + ylab("stool sample prob over time") +
+  #scale_fill_viridis(option = "A") +
+  scale_x_log10() + theme_dark() -> pC_Akk
+
+
+pC_Akk
+
+
+
+
+```
+
 
 
 ```{r, fig.height=8, fig.width=14}
@@ -1986,11 +2027,12 @@ physio %>%
   merge(.,rat_metadata,by.x="Rat_ID",by.y="Animal_id_2") %>%
   select(-SUBJID,-diet,-Cage_provider,-Animal.Identification,-Filiation,-Bacteroides,-Weight) %>%
   mutate(`Body_weigth_dynamics` = BW_D3_diffp_D0 + BW_D17_diffp_D14 + BW_D31_diffp_D28) %>%
-  rename(`colon length\n(cm)` = length_colon, 
-         `distal\nhistological score` = Total_distal, 
-         `Body weight variations\nduring the 3 DSS pulses\n(gram)` = Body_weigth_dynamics) %>%
+  rename(`2 colon length\n(cm)` = length_colon, 
+         `3 distal\nhistological score` = Total_distal, 
+         `1 Body weight variations\nduring the 3 DSS pulses\n(gram)` = Body_weigth_dynamics) %>%
   melt(id.vars=c("Rat_ID","dose","Study_group","Animal_id")) %>%
-  filter(variable %in% c("colon length\n(cm)","distal\nhistological score","Body weight variations\nduring the 3 DSS pulses\n(gram)")) %>%
+  filter(variable %in% c("2 colon length\n(cm)","3 distal\nhistological score","1 Body weight variations\nduring the 3 DSS pulses\n(gram)")) %>%
+  mutate(variable = variable %>% as.character) %>%
   #filter(variable %in% c("length_colon","Total_distal","Body_weigth_dynamics\n(3 DSS pusles)")) %>%
   na.omit() %>%
   #merge(.,hysteresis, by="Rat_ID") %>%
@@ -2002,8 +2044,9 @@ physio %>%
   #group_by(dose, variable) %>%
   ggplot(aes(x=dose %>% as.character, y=value)) +
   geom_boxplot(aes(fill=dose%>% as.character)) + 
+  geom_jitter(aes(fill=dose%>% as.character), alpha=0.5, width = 0.1) +
   scale_fill_manual(values = Grp_color[-1]) + guides(fill=FALSE) +
-  facet_wrap(~variable, scale="free_y") + xlab("DSS Dose (%)") + ylab("parameter value") -> p_physio
+  facet_wrap(~variable %>% stringr::str_sub(start=2) , scale="free_y") + xlab("DSS Dose (%)") + ylab("parameter value") -> p_physio
 
 save(p_physio, file="p_physio.rda")
 

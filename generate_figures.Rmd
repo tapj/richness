@@ -10,6 +10,7 @@ output: html_notebook
 library(grid)
 library(cowplot)
 library(ggplot2)
+library(magrittr)
 
 
 ```
@@ -36,7 +37,7 @@ Panel E: histo – Pictures
 
 ```{r, fig.height=12, fig.width=12}
 
-study_design <- png::readPNG("study_design_bis.png")
+study_design <- png::readPNG("design_richness.png")
 hypothesis   <- png::readPNG("hypothesis_model.png")
 histology    <- png::readPNG("histology_DSS.png")
 
@@ -66,8 +67,8 @@ ggsave("Figure1.pdf",h=12,w=12)
 ```{r, fig.height=5, fig.width=12, message=FALSE, warning=FALSE}
 
 cowplot::plot_grid(
-pA_diet + scale_color_manual(values=Grp_color[1:2]) + guides(color=FALSE),
-pC_diet + scale_color_manual(values=Grp_color[1:2]), labels="AUTO", rel_widths = c(1.1,2)
+pA_diet + scale_color_manual(values=Grp_color[2:1]) + guides(color=FALSE),
+pC_diet + scale_color_manual(values=Grp_color[2:1]), labels="AUTO", rel_widths = c(1.1,2)
 )
 
 ggsave("Supp_Figure1.pdf",h=5,w=12)
@@ -77,6 +78,58 @@ ggsave("Supp_Figure1.pdf",h=5,w=12)
 
 
 ```
+
+
+## Figure 2
+
+
+
+```{r}
+
+read.csv2("clusters_PCoA1_Akkermansia_histo.csv") %>%
+  select(T68,Histo_clusters,hysteresis_grp, DSS) %>%
+  filter(DSS>=1) %>%
+  xtabs(~paste0(T68,Histo_clusters)+hysteresis_grp, data=.) %>%
+  reshape2::melt() %>%
+  dplyr::rename(Clusters=`paste0(T68, Histo_clusters)`, profile=hysteresis_grp) %>%
+  mutate(profile = fct_recode(profile, `resistant` = "high",
+                                                      `resilient` = "intermediate",                          
+                                                      `no resilient` = "low")) %>%
+  ggplot() + geom_bar(aes(fill=profile,y=value,x=Clusters), stat="identity") + ylab("Rats numbers") + scale_fill_manual("Profile based on\nAkkermansia dynamics", values=c("Blue","Grey","Red"))
+  
+
+ggsave("clusters_vs_Akkermansia.pdf")
+
+
+
+```
+
+
+
+
+## Figure 4
+
+
+Figure 4: 
+-Faire union entre Akkermansia & etat stable (DMM results, gradient Akkermanisa le 0/%2%/3%, courbe correlation PcoA axe 1 et Akkermansia . 
+-Faire Tableau similaire au Tableau 1 ‘états stables mais pour Akkermansoisa (low / high) (@Pat et Julien)
+- Question : peut on faire des analyses de la compo du microbioté des différentes états ? 
+
+
+
+
+```{r, fig.height=8, fig.width=14, message=FALSE, warning=FALSE}
+
+
+plot_grid(pB_akk, pA_akk, PD_akk_PCoA_plot, pC_Akk, ncol=2,labels = c("A","B","C","D"), rel_heights = c(2,2))
+
+
+ggsave("Figure_3_Akkermansia.pdf")
+
+
+
+```
+
 
 
 
