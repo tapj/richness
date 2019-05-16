@@ -370,10 +370,10 @@ pC_diet
 
 plot_grid(
   plot_grid(
-    pA_diet+guides(color=FALSE) + scale_color_manual(values=Grp_color[1:2]),
-    pB_diet+guides(color=FALSE)+ scale_color_manual(values=Grp_color[1:2]),
+    pA_diet+guides(color=FALSE) + scale_color_manual(values=Grp_color[2:1]),
+    pB_diet+guides(color=FALSE)+ scale_color_manual(values=Grp_color[2:1]),
     nrow=2,rel_heights =   c(2,2), labels = c("A","B")), 
-  pC_diet+ scale_color_manual(values=Grp_color[1:2]),
+  pC_diet+ scale_color_manual(values=Grp_color[2:1]),
   ncol=2, rel_widths = c(2,3), labels = c(NA,"C")
   )
 
