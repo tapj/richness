@@ -1225,7 +1225,7 @@ mutate(DSSpress = fct_recode(Time,
   arrange(Time) -> akk_df
 
 
-
+save(akk_df, file="akk_df.rda")
 
 
 

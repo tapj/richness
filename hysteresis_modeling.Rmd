@@ -1,0 +1,211 @@
+---
+title: "Hysteresis modeling"
+output: html_notebook
+---
+
+
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(hysteresis)
+
+```
+
+
+
+```{r}
+load("akk_df.rda")
+  
+  
+  
+```
+
+
+
+```{r}
+
+pertubation_press_plot =
+akk_df %>%
+  select(Time,DSSpress, press_cumul_day) %>%
+  unique %>%
+  ggplot(aes(y=Time+1, x=press_cumul_day %>% as.character %>% as.numeric)) +
+  #geom_point() +
+  geom_path(color=c(rep(c("red","pink"),2),"red",rep("blue",4)), arrow = arrow(length=unit(0.20,"cm"), type = "closed")) + 
+  coord_flip() + xlab("press\nperturbation") +
+  geom_vline(xintercept = 0, linetype =2) + ylab("Time (days)")
+
+pertubation_press_plot
+
+```
+
+```{r}
+
+akk_df
+
+
+```
+
+
+
+
+```{r}
+
+
+akk_df %>%
+  arrange(press_cumul_day) %>%
+  filter(hysteresis_grp != "resistant\nprofile") %>%
+  #filter(hysteresis_grp == "no resilient\nprofile") %>%
+  select(-A1,-A2,-A3,-Study_group,-diet) %>%
+  ggplot() + 
+  geom_point(aes(y=log10(genus+10^-6),x=press_cumul_day %>% as.character %>% as.numeric, col=DSSpress)) +
+  geom_path(aes(y=log10(genus+10^-6),x=press_cumul_day %>% as.character %>% as.numeric, group=Rat_ID)) +
+  facet_wrap(~hysteresis_grp)
+
+
+
+```
+
+
+```{r}
+
+akk_df %>%
+  filter(press_cumul_day != -6) %>%
+  filter(hysteresis_grp == "resistant\nprofile") %>%
+  #filter(hysteresis_grp != "no resilient\nprofile") %>%
+  select(-A1,-A2,-A3,-Study_group,-diet) %>%
+  select(genus,press_cumul_day,Rat_ID,hysteresis_grp) %>%
+  mutate(genus_norm = -log10(genus+10^-6) %>% scale(), press_cumul_day = press_cumul_day %>% as.character %>% as.numeric() %>% scale() ) %>%
+  #ggplot() + geom_point(aes(x=press_cumul_day,y=genus_norm))
+  
+  
+  #filter(Rat_ID %in% c("R13","R17")) %>%
+  mutate(Rat_ID = Rat_ID %>% as.character) %>%
+  with(.,floop(.$press_cumul_day, .$genus_norm,  method="harmonic2",n=3,m=3)) -> models_resistant
+
+
+akk_df %>%
+  filter(press_cumul_day != -6) %>%
+  filter(hysteresis_grp != "resistant\nprofile") %>%
+  filter(hysteresis_grp != "no resilient\nprofile") %>%
+  select(-A1,-A2,-A3,-Study_group,-diet) %>%
+  select(genus,press_cumul_day,Rat_ID,hysteresis_grp) %>%
+  mutate(genus_norm = -log10(genus+10^-6) %>% scale(), press_cumul_day = press_cumul_day %>% as.character %>% as.numeric() %>% scale() ) %>%
+  #ggplot() + geom_point(aes(x=press_cumul_day,y=genus_norm))
+  
+  
+  #filter(Rat_ID %in% c("R13","R17")) %>%
+  mutate(Rat_ID = Rat_ID %>% as.character) %>%
+  with(.,floop(.$press_cumul_day, .$genus_norm,  method="harmonic2", n=3,m=3)) -> models_resilient
+
+
+
+akk_df %>%
+  filter(press_cumul_day != -6) %>%
+  filter(hysteresis_grp != "resistant\nprofile") %>%
+  filter(hysteresis_grp == "no resilient\nprofile") %>%
+  select(-A1,-A2,-A3,-Study_group,-diet) %>%
+  select(genus,press_cumul_day,Rat_ID,hysteresis_grp) %>%
+  mutate(genus_norm = -log10(genus+10^-6) %>% scale(), press_cumul_day = press_cumul_day %>% as.character %>% as.numeric() %>% scale() ) %>%
+  #ggplot() + geom_point(aes(x=press_cumul_day,y=genus_norm))
+  
+  
+  #filter(Rat_ID %in% c("R13","R17")) %>%
+  mutate(Rat_ID = Rat_ID %>% as.character) %>%
+  with(.,floop(.$press_cumul_day, .$genus_norm,  method="harmonic2", n=3,m=3)) -> models_no_resilient
+
+
+plot(models_resistant)
+plot(models_resilient)
+plot(models_no_resilient)
+
+
+data.frame(x=models_no_resilient$x, y=models_no_resilient$y) %>%
+    ggplot() + geom_point(aes(x=y,y=-x))
+
+
+
+mloop(b.x=, n.points = 24)
+
+
+models$Estimates[,"R13"]
+
+
+summary(models_resistant)
+summary(models_resilient)
+summary(models_no_resilient)
+
+
+```
+
+
+
+```{r}
+
+
+akk_df %>%
+  filter(press_cumul_day != -6) %>%
+  #filter(hysteresis_grp == "resistant\nprofile") %>%
+  #filter(hysteresis_grp != "no resilient\nprofile") %>%
+  select(-A1,-A2,-A3,-Study_group,-diet) %>%
+  select(genus,press_cumul_day,Rat_ID,hysteresis_grp) %>%
+  mutate(genus_norm = -log10(genus+10^-6) %>% scale(), press_cumul_day = press_cumul_day %>% as.character %>% as.numeric() %>% scale() ) %>%
+  #ggplot() + geom_point(aes(x=press_cumul_day,y=genus_norm))
+  
+  
+  #filter(Rat_ID %in% c("R13","R17")) %>%
+  mutate(Rat_ID = Rat_ID %>% as.character) %>%
+  with(.,floop(.$press_cumul_day, .$genus_norm,  method="harmonic2", subjects = .$Rat_ID,n=3,m=3)) -> models_all
+
+
+models_all_summary = summary(models_all)
+
+akk_df %>%
+  select(Rat_ID, hysteresis_grp) %>%
+  unique()
+
+
+models_all_summary$values %>%
+  filter(Parameter=="retention") %>%
+  merge(.,
+        akk_df %>%
+  select(Rat_ID, hysteresis_grp) %>%
+  unique(),
+  by.x="Subject", by.y="Rat_ID"
+  ) %>%
+  ggplot() + geom_errorbar(aes(x=Subject, ymin = B.q0.025, ymax = B.q0.975)) + 
+  geom_point(aes(x=Subject,y=Boot.Estimate)) +
+  facet_wrap(~hysteresis_grp, scales = "free_x") +
+  geom_hline(yintercept = 0, col="red") +
+  ylab("Hysteresis retention estimator\n(n=100 Bootstrap)") + xlab("Rats") + cowplot::theme_cowplot()
+  
+
+
+
+```
+
+
+
+```{r}
+
+
+data(EllipseData)
+EllipseData
+models <- fel(EllipseData$X,EllipseData$Y,method="harmonic2",subjects=EllipseData$subjects,subset=EllipseData$repeated==1)
+models
+
+summary(models)
+
+
+loopf <- mloop(sd.x=0.07,sd.y=0.05,n=3,m=3, retention=.5)
+loopf.model <- floop(loopf$x,loopf$y,n=3,m=3)
+
+```
+
+
+
+
+
+
+
+
