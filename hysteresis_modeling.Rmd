@@ -144,21 +144,27 @@ summary(models_no_resilient)
 
 
 akk_df %>%
-  filter(press_cumul_day != -6) %>%
+  #filter(press_cumul_day != -6) %>%
+  filter(Study_group %in% c("G5","G6","G7")) %>%
   #filter(hysteresis_grp == "resistant\nprofile") %>%
   #filter(hysteresis_grp != "no resilient\nprofile") %>%
+  filter(!(Rat_ID == "R67" & Time == "63")) %>%
+  filter(!(Rat_ID == "R66" & Time == "68")) %>%
   select(-A1,-A2,-A3,-Study_group,-diet) %>%
-  select(genus,press_cumul_day,Rat_ID,hysteresis_grp) %>%
-  mutate(genus_norm = -log10(genus+10^-6) %>% scale(), press_cumul_day = press_cumul_day %>% as.character %>% as.numeric() %>% scale() ) %>%
+  select(genus,press_cumul_day,Rat_ID,hysteresis_grp, Time) %>%
+  mutate(genus_norm = log10(genus+10^-6) , press_cumul_day = press_cumul_day %>% as.character %>% as.numeric() ) %>%
   #ggplot() + geom_point(aes(x=press_cumul_day,y=genus_norm))
   
   
   #filter(Rat_ID %in% c("R13","R17")) %>%
   mutate(Rat_ID = Rat_ID %>% as.character) %>%
-  with(.,floop(.$press_cumul_day, .$genus_norm,  method="harmonic2", subjects = .$Rat_ID,n=3,m=3)) -> models_all
+  #with(.,floop(.$press_cumul_day, .$genus_norm,  method="harmonic2", times=Time+1, subjects = .$Rat_ID,n=1,m=1)) -> models_all
+#with(.,floop(.$press_cumul_day, .$genus_norm,  method= "geometric", subjects = .$Rat_ID)) -> models_all
+with(.,floop(.$press_cumul_day, .$genus_norm,  method="harmonic2", times=Time+1, subjects = .$Rat_ID, n=3,m=1)) -> models_all
+  
+models_all_summary = summary(models_all, seed=444)
 
-
-models_all_summary = summary(models_all)
+#plot(models_all_summary)
 
 akk_df %>%
   select(Rat_ID, hysteresis_grp) %>%
@@ -173,13 +179,103 @@ models_all_summary$values %>%
   unique(),
   by.x="Subject", by.y="Rat_ID"
   ) %>%
-  ggplot() + geom_errorbar(aes(x=Subject, ymin = B.q0.025, ymax = B.q0.975)) + 
-  geom_point(aes(x=Subject,y=Boot.Estimate)) +
-  facet_wrap(~hysteresis_grp, scales = "free_x") +
+  mutate(B.q0.025 = ifelse(Boot.Estimate<0, -B.q0.025, B.q0.025),
+         B.q0.975 = ifelse(Boot.Estimate<0, -B.q0.975, B.q0.975)) %>%
+  mutate(Boot.Estimate = ifelse(Boot.Estimate<0, -Boot.Estimate, Boot.Estimate)) %>%
+  ggplot() + geom_errorbar(aes(x=forcats::fct_reorder(Subject,Boot.Estimate), ymin = B.q0.025, ymax = B.q0.975, col=hysteresis_grp), width = 0.6) + 
+  geom_point(aes(x=forcats::fct_reorder(Subject,Boot.Estimate),y=Boot.Estimate, col=hysteresis_grp)) +
+  #facet_wrap(~hysteresis_grp, scales = "free_x") +
   geom_hline(yintercept = 0, col="red") +
-  ylab("Hysteresis retention estimator\n(n=100 Bootstrap)") + xlab("Rats") + cowplot::theme_cowplot()
+  ylab("Hysteresis retention parameter\n(n=1000 Bootstrap)") + 
+  xlab("Rats") + cowplot::theme_cowplot() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, size=8))
   
 
+models_all_summary$values %>%
+  filter(Parameter=="b.y") %>%
+  merge(.,
+        akk_df %>%
+  select(Rat_ID, hysteresis_grp) %>%
+  unique(),
+  by.x="Subject", by.y="Rat_ID"
+  ) %>%
+  mutate(B.q0.025 = ifelse(Boot.Estimate<0, -B.q0.025, B.q0.025),
+         B.q0.975 = ifelse(Boot.Estimate<0, -B.q0.975, B.q0.975)) %>%
+  mutate(Boot.Estimate = ifelse(Boot.Estimate<0, -Boot.Estimate, Boot.Estimate)) %>%
+  ggplot() + geom_errorbar(aes(x=forcats::fct_reorder(Subject,Boot.Estimate), ymin = B.q0.025, ymax = B.q0.975, col=hysteresis_grp), width = 0.6) + 
+  geom_point(aes(x=forcats::fct_reorder(Subject,Boot.Estimate),y=Boot.Estimate, col=hysteresis_grp)) +
+  #facet_wrap(~hysteresis_grp, scales = "free_x") +
+  geom_hline(yintercept = 0, col="red") +
+  ylab("Hysteresis saturation parameter\n(n=1000 Bootstrap)") + 
+  xlab("Rats") + cowplot::theme_cowplot() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, size=8))
+
+
+models_all_summary$values %>%
+  filter(Parameter=="retention")
+
+
+
+
+
+
+#plot(models_all)
+```
+
+```{r}
+
+akk_df %>%
+  filter(press_cumul_day != -6) %>%
+  filter(Study_group %in% c("G5","G6","G7")) %>%
+  #filter(hysteresis_grp == "resistant\nprofile") %>%
+  #filter(hysteresis_grp != "no resilient\nprofile") %>%
+  select(-A1,-A2,-A3,-Study_group,-diet) %>%
+  select(genus,press_cumul_day,Rat_ID,hysteresis_grp) %>%
+  mutate(genus_norm = -log10(genus+10^-6) %>% scale(), press_cumul_day = press_cumul_day %>% as.character %>% as.numeric() %>% scale() ) %>%
+  #ggplot() + geom_point(aes(x=press_cumul_day,y=genus_norm))
+  
+  
+  filter(Rat_ID %in% c("R62")) %>%
+  mutate(Rat_ID = Rat_ID %>% as.character) %>%
+  with(.,floop(.$press_cumul_day, .$genus_norm,  method="harmonic2" ,n=3,m=3)) -> model_rat62
+
+
+akk_df %>%
+  #filter(press_cumul_day != -6) %>%
+  filter(Study_group %in% c("G5","G6","G7")) %>%
+  #filter(hysteresis_grp == "resistant\nprofile") %>%
+  #filter(hysteresis_grp != "no resilient\nprofile") %>%
+  select(-A1,-A2,-A3,-Study_group,-diet) %>%
+  #select(genus,press_cumul_day,Rat_ID,hysteresis_grp) %>%
+  mutate(genus_norm = -log10(genus+10^-6) %>% scale(), press_cumul_day = press_cumul_day %>% as.character %>% as.numeric() %>% scale() ) %>%
+  #ggplot() + geom_point(aes(x=press_cumul_day,y=genus_norm))
+  
+  
+  filter(Rat_ID %in% c("R62")) %>%
+  mutate(Rat_ID = Rat_ID %>% as.character) %>%
+  ggplot() + geom_text(aes(x=press_cumul_day, y=-genus_norm, label=Time, col=DSSpress))
+
+
+
+
+
+
+```
+
+
+```{r}
+
+tip_akk = 0.011480422 #bimodality test
+
+akk_df %>%
+  #filter(DSSpulse=="Water") %>%
+  filter(Study_group %in% c("G5","G6","G7")) %>%
+  ggplot() + 
+  geom_line(aes(x=forcats::fct_reorder(Rat_ID,genus,mean) , y=genus+10^-6, group = forcats::fct_reorder(Rat_ID,genus,mean), col=hysteresis_grp)) +
+  geom_point(aes(x=forcats::fct_reorder(Rat_ID,genus,mean) , y=genus+10^-6)) +
+  geom_hline(yintercept = tip_akk, linetype=2) +
+  scale_y_log10() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, size=8))
 
 
 ```
@@ -199,6 +295,14 @@ summary(models)
 
 loopf <- mloop(sd.x=0.07,sd.y=0.05,n=3,m=3, retention=.5)
 loopf.model <- floop(loopf$x,loopf$y,n=3,m=3)
+
+
+for (i in c(-1,1,0,-4,4)){
+  obj<-mloop(retention=i,n.points=100,period=99, m=3,n=3)
+  plot(obj$x,obj$y,xlim=c(-1,1),ylim=c(-5,5),type="l",main=paste("retention=",i,sep=""),xlab="x",ylab="y")
+  segments(0,0,0,i)
+  text(0.3,0.5,"Retention")
+}
 
 ```
 
