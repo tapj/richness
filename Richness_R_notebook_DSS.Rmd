@@ -655,6 +655,51 @@ pC_Akk
 ```
 
 
+```{r, fig.height=10, fig.width=6}
+
+
+
+library(ggridges)
+
+
+mapping_file %>%
+  merge(.,rat_metadata,by.x="Rat_ID",by.y="Animal_id_2") %>%
+  select(Rat_ID,samplenr,Time,DSS,Study_group) %>%
+  filter(Study_group != "G1") %>%
+  mutate(Time_days = Time %>% gsub("Tm","-", .) %>% gsub("T","",.) %>% as.character %>% as.numeric) %>% filter(Time_days >= -8) %>% 
+  filter(Time != "T47") %>%
+  mutate(DSS = Study_group %>% forcats::fct_recode(`0` = "G2",`0.25` = "G3",`0.5` = "G4",`1` = "G5",`2` = "G6",`3` = "G7") %>% as.character %>% as.numeric ) %>%
+  merge(.,t(genus[, select_DSS_samples %>% as.character]), by.x="samplenr", by.y="row.names") %>%
+  select(contains("Akkermansia"),contains("D_5__Ruminococcus"),contains("Phascolarctobacterium"),contains("D_4__Christensenellaceae;D_5__uncultured"),DSS,Time_days, Rat_ID) %>%
+  mutate(DSS_group = ifelse(DSS>=1,"High dose","No or Low dose")) %>%
+  #filter(DSS ==0) %>%
+  rename_at(1, ~"Akkermansia") %>%
+  rename_at(2, ~"Ruminococcus") %>%
+  rename_at(3, ~"Phascolarctobacterium") %>%
+  rename_at(4, ~"Christensenellaceae") %>%
+  reshape2::melt(id.vars=c("DSS","Time_days","Rat_ID","DSS_group")) %>%
+ggplot() + #geom_point(aes(x=Akkermansia,y=Time_days))
+  geom_density_ridges_gradient(aes(x=value + 10^-6, y=reorder(Time_days %>% as.character,Time_days), fill=..x..)) + 
+  #geom_density(aes(x=Bifidobacterium + 10^-6, fill=cat_age_val)) +
+  
+  facet_grid(variable~DSS_group, scales ="free") +
+  viridis::scale_fill_viridis(option = "B") +
+  #geom_vline(xintercept = 0.009129289, col="red", size=1, alpha = 0.75, linetype=3) +
+  guides(fill=FALSE) +
+  xlab("rel. abundance") + ylab("stool sample prob over time") +
+  scale_x_log10() + theme_dark() -> p_all_bimodal_species
+
+
+p_all_bimodal_species
+
+ggsave(filename = "Figure_over_time_bimodal_species.pdf")
+
+
+```
+
+
+
+
 ```{r}
 
 
@@ -685,7 +730,7 @@ ggplot() + #geom_point(aes(x=Akkermansia,y=Time_days))
   geom_vline(xintercept = 0.009129289, col="red", size=1, alpha = 0.75, linetype=3) +
   guides(fill=FALSE) +
   xlab("Akkermansia") + ylab("stool sample prob over time") +
-  #scale_fill_viridis(option = "A") +
+  scale_fill_viridis(option = "A") +
   scale_x_log10() + theme_dark() -> pC_Akk
 
 
