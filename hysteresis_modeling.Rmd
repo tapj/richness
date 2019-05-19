@@ -441,15 +441,17 @@ models_all_summary$values %>%
 
 rbind(
   
-mloop(retention=0,n.points=100,period=99, m=1,n=3, b.y=0, b.x=15.4778485, cx = 10.9715306, cy=-0.9264833, phase.angle = -7.3910444) %>% with(., data.frame(x=.$x,y=.$y, type="resistant")),
+mloop(retention=0,n.points=100,period=99, m=1,n=3, b.y=0, b.x=15.4778485, cx = 10.9715306, cy=-0.9264833, phase.angle = -7.3910444) %>% with(., data.frame(x=.$x,y=.$y, hysteresis_grp="resistant")),
 
 
-mloop(retention=0,n.points=100,period=99, m=1,n=3, b.y=-0.6499827, b.x=16.5271817, cx = 11.8892321, cy=-1.7996530, phase.angle = -7.3336891) %>% with(., data.frame(x=.$x,y=.$y, type="resilient")),
+mloop(retention=0,n.points=100,period=99, m=1,n=3, b.y=-0.6499827, b.x=16.5271817, cx = 11.8892321, cy=-1.7996530, phase.angle = -7.3336891) %>% with(., data.frame(x=.$x,y=.$y, hysteresis_grp="resilient")),
 
-mloop(retention=1.3664291,n.points=100,period=99, m=1,n=3, b.y=-0.5516496, b.x=15.6476289, cx = 11.1731736, cy=-1.9507013, phase.angle = -7.4588586) %>% with(., data.frame(x=.$x,y=.$y, type="no resilient"))
+mloop(retention=1.3664291,n.points=100,period=99, m=1,n=3, b.y=-0.5516496, b.x=15.6476289, cx = 11.1731736, cy=-1.9507013, phase.angle = -7.4588586) %>% with(., data.frame(x=.$x,y=.$y, hysteresis_grp="no resilient"))
 
-) %>%
-  ggplot() + geom_path(aes(x=x,y=y)) + facet_wrap(~type) +
+) -> model_hysteresis_df
+
+model_hysteresis_df %>%
+  ggplot() + geom_path(aes(x=x,y=y)) + facet_wrap(~hysteresis_grp) +
   danr::theme_dan() + 
   xlab("Press perturbation\n(days)") + ylab("Akkermansia\nrel. abundance")
 
@@ -475,16 +477,56 @@ akk_df %>%
   mutate(genus_log=log10(genus+10^-6)) %>%
   summarise(m=mean(genus_log), sd=sd(genus_log), n=n()) %>%
   mutate(sem=sd/sqrt(n)) %>%
-  mutate(CI_inf=m-1.96*sem, CI_sup=m+1.96*sem) %>%
-  #mutate(CI_inf = ifelse(CI_inf<0, 10^-4, CI_inf)) %>%
-  ggplot() + 
+  mutate(CI_inf=m-1.96*sem, CI_sup=m+1.96*sem) -> observed_hystesis_data_df
+
+ 
+observed_hystesis_data_df %>%
+
+ ggplot() + 
   geom_point(aes(x=press_cumul_day,y=m, col=Time>30)) +
   ggrepel::geom_text_repel(aes(x=press_cumul_day,y=m, label=Time, col=Time>30)) +
   geom_errorbar(aes(x=press_cumul_day,ymin=CI_inf, ymax=CI_sup, col=Time>30), width=0.4) +
-  facet_wrap(~hysteresis_grp) + danr::theme_dan()
+  facet_wrap(~hysteresis_grp) + danr::theme_dan() +
+  xlab("Akkermansia\nrel. abundance") + ylab("Press perturbation") +
+  guides(col=FALSE)
 
 
 
+
+
+```
+
+
+```{r}
+
+
+observed_hystesis_data_df %>%
+
+ ggplot() + 
+  geom_point(aes(x=press_cumul_day,y=m, col=Time>30)) +
+  ggrepel::geom_text_repel(aes(x=press_cumul_day,y=m, label=Time, col=Time>30)) +
+  geom_errorbar(aes(x=press_cumul_day,ymin=CI_inf, ymax=CI_sup, col=Time>30), width=0.4) +
+  facet_wrap(~hysteresis_grp) + danr::theme_dan() +
+  xlab("Akkermansia\nrel. abundance") + ylab("Press perturbation") +
+  guides(col=FALSE) +
+  geom_path(data=model_hysteresis_df, aes(x=x,y=y))  +
+  danr::theme_dan() + 
+  xlab("Press perturbation\n(days)") + ylab("Akkermansia\nrel. abundance (Log10 scale)") -> plot_hysteresis_model
+
+
+
+```
+
+
+### final plot
+```{r, fig.height=8, fig.width=12}
+cowplot::plot_grid(
+cowplot::plot_grid(
+  pertubation_press_plot + danr::theme_dan(),
+  plot_tipping_point_crosses + ylab("Akkermansia\nTipping point"),
+  plot_hysteresis_retention + scale_color_discrete("detected profile"), 
+  rel_widths = c(6,4,8), nrow = 1, labels="AUTO"),
+plot_hysteresis_model + scale_color_manual(values=c("red","blue")), nrow=2, labels=c(NA,"D"))
 
 
 ```
