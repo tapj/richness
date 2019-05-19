@@ -23,19 +23,20 @@ load("akk_df.rda")
 
 
 
-```{r}
+```{r, fig.height=4, fig.width=8}
 
 pertubation_press_plot =
 akk_df %>%
   select(Time,DSSpress, press_cumul_day) %>%
   unique %>%
+  
   ggplot(aes(y=Time+1, x=press_cumul_day %>% as.character %>% as.numeric)) +
   #geom_point() +
   geom_path(color=c(rep(c("red","pink"),2),"red",rep("blue",4)), arrow = arrow(length=unit(0.20,"cm"), type = "closed")) + 
   coord_flip() + xlab("press\nperturbation") +
-  geom_vline(xintercept = 0, linetype =2) + ylab("Time (days)")
+  geom_vline(xintercept = 0, linetype =2) + ylab("Time\n(days)")
 
-pertubation_press_plot
+pertubation_press_plot + danr::theme_dan()
 
 ```
 
@@ -190,7 +191,6 @@ models_all_summary$values %>%
   xlab("Rats") + cowplot::theme_cowplot() +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, size=8))
   
-
 models_all_summary$values %>%
   filter(Parameter=="b.y") %>%
   merge(.,
@@ -211,11 +211,33 @@ models_all_summary$values %>%
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, size=8))
 
 
+
+models_all_summary$values %>%
+  filter(Parameter=="cy") %>%
+  merge(.,
+        akk_df %>%
+  select(Rat_ID, hysteresis_grp) %>%
+  unique(),
+  by.x="Subject", by.y="Rat_ID"
+  ) %>%
+  #mutate(B.q0.025 = ifelse(Boot.Estimate<0, -B.q0.025, B.q0.025),
+  #       B.q0.975 = ifelse(Boot.Estimate<0, -B.q0.975, B.q0.975)) %>%
+  #mutate(Boot.Estimate = ifelse(Boot.Estimate<0, -Boot.Estimate, Boot.Estimate)) %>%
+  ggplot() + geom_errorbar(aes(x=forcats::fct_reorder(Subject,Boot.Estimate), ymin = B.q0.025, ymax = B.q0.975, col=hysteresis_grp), width = 0.6) + 
+  geom_point(aes(x=forcats::fct_reorder(Subject,Boot.Estimate),y=Boot.Estimate, col=hysteresis_grp)) +
+  #facet_wrap(~hysteresis_grp, scales = "free_x") +
+  geom_hline(yintercept = 0, col="red") +
+  ylab("Hysteresis center parameter\n(n=1000 Bootstrap)") + 
+  xlab("Rats") + cowplot::theme_cowplot() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, size=8))
+
+
 models_all_summary$values %>%
   filter(Parameter=="retention")
 
 
-
+models_all_summary$values %>%
+  filter(Parameter=="cy")
 
 
 
@@ -262,10 +284,10 @@ akk_df %>%
 
 ```
 
-
+## tipping point figure
 ```{r}
 
-tip_akk = 0.011480422 #bimodality test
+tip_akk = 0.011480422 #from bimodality test
 
 akk_df %>%
   #filter(DSSpulse=="Water") %>%
@@ -276,6 +298,193 @@ akk_df %>%
   geom_hline(yintercept = tip_akk, linetype=2) +
   scale_y_log10() +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, size=8))
+
+
+```
+
+
+## akkermansia hysteresis and tipping point
+
+
+
+```{r}
+
+
+tip_akk = 0.011480422 #from bimodality test
+
+
+merge(
+  
+akk_df %>%
+  filter(!(Rat_ID == "R67" & Time == "63")) %>%
+  filter(!(Rat_ID == "R66" & Time == "68")) %>%
+  #filter(DSSpulse=="Water") %>%
+  filter(Study_group %in% c("G5","G6","G7")) %>%
+  select(Rat_ID,genus,hysteresis_grp) %>%
+  group_by(Rat_ID) %>%
+  summarise(genus_min = min(genus), genus_max=max(genus)) %>%
+  mutate(tipping_point = tip_akk) %>%
+  mutate(tipping_point_crosses = ifelse(genus_min < tipping_point, "yes", "no")),
+
+
+
+
+models_all_summary$values %>%
+  filter(Parameter=="retention") %>%
+  merge(.,
+        akk_df %>%
+          filter(!(Rat_ID == "R67" & Time == "63")) %>%
+  filter(!(Rat_ID == "R66" & Time == "68")) %>%
+  select(Rat_ID, hysteresis_grp) %>%
+  unique(),
+  by.x="Subject", by.y="Rat_ID"
+  ) %>%
+  mutate(B.q0.025 = ifelse(Boot.Estimate<0, -B.q0.025, B.q0.025),
+         B.q0.975 = ifelse(Boot.Estimate<0, -B.q0.975, B.q0.975)) %>%
+  mutate(Boot.Estimate = ifelse(Boot.Estimate<0, -Boot.Estimate, Boot.Estimate)) %>%
+  select(Subject,B.q0.025,B.q0.975,Boot.Estimate,hysteresis_grp) %>%
+  mutate(retention = ifelse((B.q0.025 > 0 &  B.q0.975 < 0) | (B.q0.025 < 0 &  B.q0.975 > 0)   , "no","yes")), by.x="Rat_ID",by.y="Subject") -> akk_tipping_retention
+
+akk_tipping_retention %>%
+  mutate(hysteresis_grp = case_when(
+    
+tipping_point_crosses == "no" ~ "resistant",
+tipping_point_crosses == "yes" & retention == "yes" ~ "no resilient",
+tipping_point_crosses == "yes" & retention == "no" ~ "resilient"
+    
+    
+    
+  )) -> akk_tipping_retention
+
+
+
+```
+
+
+tipping point and retention plots
+```{r, fig.height=4, fig.width=4}
+
+akk_tipping_retention %>%
+  ggplot() + 
+  geom_errorbar(aes(x=forcats::fct_reorder(Rat_ID,hysteresis_grp %>% as.factor %>% as.numeric) , ymin=genus_min+10^-6, ymax=genus_max+10^-6, group = forcats::fct_reorder(Rat_ID,hysteresis_grp %>% as.factor %>% as.numeric), col=hysteresis_grp), width=0) + 
+  geom_point(aes(x=forcats::fct_reorder(Rat_ID,hysteresis_grp %>% as.factor %>% as.numeric) , y=genus_min+10^-6,
+                 group = forcats::fct_reorder(Rat_ID,hysteresis_grp %>% as.factor %>% as.numeric), col=hysteresis_grp)) + 
+  
+  geom_point(aes(x=forcats::fct_reorder(Rat_ID,hysteresis_grp %>% as.factor %>% as.numeric) , y=genus_max+10^-6,
+                 group = forcats::fct_reorder(Rat_ID,hysteresis_grp %>% as.factor %>% as.numeric), col=hysteresis_grp)) +
+  #facet_wrap(~tipping_point_crosses, scales="free_x") + 
+  scale_y_log10() +
+  geom_hline(yintercept = tip_akk, linetype=2) +
+  xlab("Rat id") +
+  ylab("Akkermansia\nrel. abundance") +
+  danr::theme_dan() +
+  theme(axis.text.y = element_text(angle = 0, vjust = 0.5, size=6)) +
+  coord_flip() +
+  guides(col=FALSE) -> plot_tipping_point_crosses
+
+
+
+
+```
+
+
+```{r, fig.height=4, fig.width=5.5}
+
+akk_tipping_retention %>%
+  ggplot() + 
+  geom_errorbar(aes(x=forcats::fct_reorder(Rat_ID,hysteresis_grp %>% as.factor %>% as.numeric) , ymin=B.q0.025, ymax=B.q0.975, group = forcats::fct_reorder(Rat_ID,hysteresis_grp %>% as.factor %>% as.numeric), col=hysteresis_grp)) + 
+  geom_point(aes(x=forcats::fct_reorder(Rat_ID,hysteresis_grp %>% as.factor %>% as.numeric) , y=Boot.Estimate, group = forcats::fct_reorder(Rat_ID,hysteresis_grp %>% as.factor %>% as.numeric), col=hysteresis_grp)) +
+  #facet_wrap(~retention, scales="free_x") + 
+  #scale_y_log10() +
+  geom_hline(yintercept = 0, linetype=2) +
+  xlab("Rat id") +
+  ylab("Hysteresis\nretention parameter") +
+  danr::theme_dan() +
+  theme(axis.text.y = element_text(angle = 0, vjust = 0.5, size=6)) +
+  coord_flip() -> plot_hysteresis_retention
+
+
+
+
+
+```
+
+
+```{r, fig.height=3, fig.width=12}
+
+cowplot::plot_grid(
+  pertubation_press_plot + danr::theme_dan(),
+  plot_tipping_point_crosses,
+  plot_hysteresis_retention + scale_color_discrete("detected profile"), 
+  rel_widths = c(6,4,8), nrow = 1, labels="AUTO")
+
+
+
+
+```
+
+## hysteresis models
+
+
+
+```{r, fig.height=4, fig.width=12}
+
+
+models_all_summary$values %>%
+  merge( akk_tipping_retention %>%
+  select(Rat_ID, hysteresis_grp), by.x="Subject", by.y="Rat_ID") %>%
+  select(hysteresis_grp,Parameter,Boot.Estimate) %>%
+  mutate(Boot.Estimate = ifelse(Parameter=="retention", abs(Boot.Estimate), Boot.Estimate)) %>%
+  group_by(hysteresis_grp,Parameter) %>%
+  summarise(m=mean(Boot.Estimate), sd=sd(Boot.Estimate))  %>% filter(hysteresis_grp=="no resilient")
+
+
+rbind(
+  
+mloop(retention=0,n.points=100,period=99, m=1,n=3, b.y=0, b.x=15.4778485, cx = 10.9715306, cy=-0.9264833, phase.angle = -7.3910444) %>% with(., data.frame(x=.$x,y=.$y, type="resistant")),
+
+
+mloop(retention=0,n.points=100,period=99, m=1,n=3, b.y=-0.6499827, b.x=16.5271817, cx = 11.8892321, cy=-1.7996530, phase.angle = -7.3336891) %>% with(., data.frame(x=.$x,y=.$y, type="resilient")),
+
+mloop(retention=1.3664291,n.points=100,period=99, m=1,n=3, b.y=-0.5516496, b.x=15.6476289, cx = 11.1731736, cy=-1.9507013, phase.angle = -7.4588586) %>% with(., data.frame(x=.$x,y=.$y, type="no resilient"))
+
+) %>%
+  ggplot() + geom_path(aes(x=x,y=y)) + facet_wrap(~type) +
+  danr::theme_dan() + 
+  xlab("Press perturbation\n(days)") + ylab("Akkermansia\nrel. abundance")
+
+
+```
+
+
+
+```{r}
+
+akk_df %>%
+  filter(Study_group %in% c("G5","G6","G7")) %>%
+  filter(!(Rat_ID == "R67" & Time == "63")) %>%
+  filter(!(Rat_ID == "R66" & Time == "68")) %>%
+  select(-A1,-A2,-A3,-Study_group,-diet) %>%
+  select(genus,press_cumul_day,Rat_ID,hysteresis_grp, Time) %>%
+  mutate(genus_norm = log10(genus+10^-6) , press_cumul_day = press_cumul_day %>% as.character %>% as.numeric() ) %>%
+  mutate(Rat_ID = Rat_ID %>% as.character) %>%
+  select(-hysteresis_grp) %>%
+  merge( akk_tipping_retention %>%
+  select(Rat_ID, hysteresis_grp),by="Rat_ID") %>%
+  group_by(hysteresis_grp,press_cumul_day,Time) %>%
+  mutate(genus_log=log10(genus+10^-6)) %>%
+  summarise(m=mean(genus_log), sd=sd(genus_log), n=n()) %>%
+  mutate(sem=sd/sqrt(n)) %>%
+  mutate(CI_inf=m-1.96*sem, CI_sup=m+1.96*sem) %>%
+  #mutate(CI_inf = ifelse(CI_inf<0, 10^-4, CI_inf)) %>%
+  ggplot() + 
+  geom_point(aes(x=press_cumul_day,y=m, col=Time>30)) +
+  ggrepel::geom_text_repel(aes(x=press_cumul_day,y=m, label=Time, col=Time>30)) +
+  geom_errorbar(aes(x=press_cumul_day,ymin=CI_inf, ymax=CI_sup, col=Time>30), width=0.4) +
+  facet_wrap(~hysteresis_grp) + danr::theme_dan()
+
+
+
 
 
 ```
