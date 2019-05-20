@@ -33,10 +33,15 @@ akk_df %>%
   ggplot(aes(y=Time+1, x=press_cumul_day %>% as.character %>% as.numeric)) +
   #geom_point() +
   geom_path(color=c(rep(c("red","pink"),2),"red",rep("blue",4)), arrow = arrow(length=unit(0.20,"cm"), type = "closed")) + 
+  ggrepel::geom_text_repel(aes(y=Time+1, x=press_cumul_day %>% as.character %>% as.numeric, label=Time, col=DSSpress), alpha = 1) +
+  geom_point(aes(y=Time+1, x=press_cumul_day %>% as.character %>% as.numeric, col=DSSpress), alpha = 0) +
   coord_flip() + xlab("press\nperturbation") +
-  geom_vline(xintercept = 0, linetype =2) + ylab("Time\n(days)")
+  geom_vline(xintercept = 0, linetype =2) + ylab("Time\n(days)") +
+  scale_color_manual("", values=c("blue","red"), labels=c("Washout period\n(Water)","Chronic challenge\n(DSS)")) +
+  guides(colour = guide_legend("Treatment", override.aes = list(size = 3, alpha = 1)))
 
-pertubation_press_plot + danr::theme_dan()
+pertubation_press_plot + danr::theme_dan()  +
+  theme(legend.position = c(0.7,0.75))
 
 ```
 
@@ -365,6 +370,7 @@ tipping point and retention plots
 ```{r, fig.height=4, fig.width=4}
 
 akk_tipping_retention %>%
+  mutate(hysteresis_grp = hysteresis_grp %>% forcats::as_factor(levels=c("resistant","resilien","no resilient"))) %>%
   ggplot() + 
   geom_errorbar(aes(x=forcats::fct_reorder(Rat_ID,hysteresis_grp %>% as.factor %>% as.numeric) , ymin=genus_min+10^-6, ymax=genus_max+10^-6, group = forcats::fct_reorder(Rat_ID,hysteresis_grp %>% as.factor %>% as.numeric), col=hysteresis_grp), width=0) + 
   geom_point(aes(x=forcats::fct_reorder(Rat_ID,hysteresis_grp %>% as.factor %>% as.numeric) , y=genus_min+10^-6,
@@ -391,6 +397,7 @@ akk_tipping_retention %>%
 ```{r, fig.height=4, fig.width=5.5}
 
 akk_tipping_retention %>%
+  mutate(hysteresis_grp = hysteresis_grp %>% forcats::as_factor(levels=c("resistant","resilien","no resilient"))) %>%
   ggplot() + 
   geom_errorbar(aes(x=forcats::fct_reorder(Rat_ID,hysteresis_grp %>% as.factor %>% as.numeric) , ymin=B.q0.025, ymax=B.q0.975, group = forcats::fct_reorder(Rat_ID,hysteresis_grp %>% as.factor %>% as.numeric), col=hysteresis_grp)) + 
   geom_point(aes(x=forcats::fct_reorder(Rat_ID,hysteresis_grp %>% as.factor %>% as.numeric) , y=Boot.Estimate, group = forcats::fct_reorder(Rat_ID,hysteresis_grp %>% as.factor %>% as.numeric), col=hysteresis_grp)) +
@@ -473,6 +480,7 @@ akk_df %>%
   select(-hysteresis_grp) %>%
   merge( akk_tipping_retention %>%
   select(Rat_ID, hysteresis_grp),by="Rat_ID") %>%
+  mutate(hysteresis_grp = hysteresis_grp %>% forcats::as_factor(levels=c("resistant","resilien","no resilient"))) %>%
   group_by(hysteresis_grp,press_cumul_day,Time) %>%
   mutate(genus_log=log10(genus+10^-6)) %>%
   summarise(m=mean(genus_log), sd=sd(genus_log), n=n()) %>%
@@ -487,8 +495,10 @@ observed_hystesis_data_df %>%
   ggrepel::geom_text_repel(aes(x=press_cumul_day,y=m, label=Time, col=Time>30)) +
   geom_errorbar(aes(x=press_cumul_day,ymin=CI_inf, ymax=CI_sup, col=Time>30), width=0.4) +
   facet_wrap(~hysteresis_grp) + danr::theme_dan() +
-  xlab("Akkermansia\nrel. abundance") + ylab("Press perturbation") +
-  guides(col=FALSE)
+  ylab("Akkermansia\nrel. abundance") + xlab("Press perturbation") +
+  guides(col=FALSE) +
+  annotate("segment", x = 0, xend = 4, y = -4, yend = -4, size=4, colour = "grey") + 
+  annotate("text", x = 10, y = -4,  label = "model")
 
 
 
@@ -503,13 +513,13 @@ observed_hystesis_data_df %>%
 observed_hystesis_data_df %>%
 
  ggplot() + 
-  geom_point(aes(x=press_cumul_day,y=m, col=Time>30)) +
-  ggrepel::geom_text_repel(aes(x=press_cumul_day,y=m, label=Time, col=Time>30)) +
-  geom_errorbar(aes(x=press_cumul_day,ymin=CI_inf, ymax=CI_sup, col=Time>30), width=0.4) +
+  geom_point(aes(x=press_cumul_day,y=m, col=Time>31)) +
+  ggrepel::geom_text_repel(aes(x=press_cumul_day,y=m, label=Time, col=Time>31)) +
+  geom_errorbar(aes(x=press_cumul_day,ymin=CI_inf, ymax=CI_sup, col=Time>31), width=0.4) +
   facet_wrap(~hysteresis_grp) + danr::theme_dan() +
   xlab("Akkermansia\nrel. abundance") + ylab("Press perturbation") +
   guides(col=FALSE) +
-  geom_path(data=model_hysteresis_df, aes(x=x,y=y))  +
+  geom_path(data=model_hysteresis_df, aes(x=x,y=y), col="grey", size=3, alpha=0.5)  +
   danr::theme_dan() + 
   xlab("Press perturbation\n(days)") + ylab("Akkermansia\nrel. abundance (Log10 scale)") -> plot_hysteresis_model
 
@@ -520,14 +530,38 @@ observed_hystesis_data_df %>%
 
 ### final plot
 ```{r, fig.height=8, fig.width=12}
-cowplot::plot_grid(
-cowplot::plot_grid(
-  pertubation_press_plot + danr::theme_dan(),
-  plot_tipping_point_crosses + ylab("Akkermansia\nTipping point"),
-  plot_hysteresis_retention + scale_color_discrete("detected profile"), 
-  rel_widths = c(6,4,8), nrow = 1, labels="AUTO"),
-plot_hysteresis_model + scale_color_manual(values=c("red","blue")), nrow=2, labels=c(NA,"D"))
 
+dat_text = data.frame(
+  label = c("Hysteresis model fit", "", ""),
+  hysteresis_grp   = c("resistant", "resilient", "no resilient"),
+  x = c(-9,NA,NA),
+  y = c(-4,NA,NA),
+  xend = c(-7,NA,NA),
+  yend = c(-4,NA,NA)
+)
+
+
+
+cowplot::plot_grid(
+cowplot::plot_grid(
+  pertubation_press_plot + danr::theme_dan()  +
+  theme(legend.position = c(0.65,0.75)),
+  plot_tipping_point_crosses + ylab("Akkermansia rel. abund.\n and Tipping point") + scale_color_brewer("detected profile", type = "qual"),
+  plot_hysteresis_retention + scale_color_brewer("detected profile", type = "qual") + theme(legend.position = c(0.45, 0.25)), 
+  rel_widths = c(6,4,4), nrow = 1, labels="AUTO"),
+plot_hysteresis_model +  
+  scale_color_manual("", values=c("red","blue"), labels=c("Chronic challenge (DSS)","Washout period (Water)")) +
+  theme(legend.position = c(0, 0.25)) +
+  #annotate("segment", x = -9, xend = -7, y = -4, yend = -4, size=3, colour = "grey") + 
+  geom_segment(data=dat_text, mapping = aes(x = x, xend = xend, y = y, yend = yend), size=3, colour = "grey") +
+  geom_text(data=dat_text, mapping = aes(x = -6, y = -4, label = label, hjust = 0)) +
+  #annotate("text", x = -1, y = -4,  label = "model") +
+  guides(colour = guide_legend("Treatment", override.aes = list(size = 1, alpha = 1))), nrow=2, labels=c(NA,"D"))
+
+
+
+
+ggsave("Figure3_hysteresis_modeling.pdf", h=8, w=12)
 
 ```
 
