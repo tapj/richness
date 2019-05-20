@@ -292,17 +292,19 @@ genus_jsd %>%
   summarize(m=1-median(value), q25=1-quantile(value,0.25), q75=1-quantile(value,0.75) ) %>%
   
   ggplot() + 
-  geom_line(aes(x=days  , y=m, group=hysteresis_grp, col=hysteresis_grp), size=3) +
-  geom_line(aes(x=days  , y=q25, group=hysteresis_grp, col=hysteresis_grp), linetype=2  ) +
-  geom_line(aes(x=days  , y=q75, group=hysteresis_grp, col=hysteresis_grp), linetype=2) +
+  geom_line(aes(x=days  , y=m, group=hysteresis_grp), col="darkgrey", size=3) +
+  geom_line(aes(x=days  , y=q25, group=hysteresis_grp), col="darkgrey", linetype=2  ) +
+  geom_line(aes(x=days  , y=q75, group=hysteresis_grp), col="darkgrey", linetype=2) +
  
-  geom_hline(yintercept = 1-0.19, col="grey", alpha=0.5, size=3) +
+  geom_hline(yintercept = 1-0.19, col="pink", alpha=0.5, size=3) +
   #geom_vline(aes(xintercept = days-1) ,  col=rep(c("blue","red","blue","red","blue","red","blue","blue"),4),  alpha=0.1, size=3) +
   geom_rect(aes(xmin=Time_days.x,xmax=Time_days.y, fill=Step), alpha=0.2, ymin=-Inf, ymax=+Inf) +
    #theme(axis.text.x = element_text(hjust =0.5)) +
    facet_wrap(~hysteresis_grp) +
-  scale_fill_manual(values=c("Red","Blue")) +
-  guides(col=FALSE) + ylab("Microbiota Stability\n(1- JSD per step)") + xlab("Days") 
+  scale_fill_manual("Treatment",values=c("Red","Blue")) +
+  guides(col=FALSE) + ylab("Microbiota Stability\n(1- JSD by step)") + xlab("Days") -> plot_stabibility_resilience
+
+plot_stabibility_resilience
 
 ggsave("Figure_jsd_stability_resilience.pdf", h=6, w=12)
 
@@ -553,13 +555,15 @@ rownames(genus_stool.int.denoized)[rev(head(order(  rowSums(abs(fitted(fit_genus
 
 
 
- f = fitted(fit_genus[[9]], scale = TRUE) - as.vector(fitted(fit_genus[[1]], scale = TRUE))
+ f = DirichletMultinomial::fitted(fit_genus[[9]], scale = TRUE) - as.vector(DirichletMultinomial::fitted(fit_genus[[1]], scale = TRUE))
  
  f %>% 
    abs %>%
   apply(1,sum) %>%
-   as_tibble() %>%
+   as.matrix() %>%
+   as.data.frame() %>%
    tibble::rownames_to_column("genus") %>%
+    dplyr::rename(value = V1 ) %>%
     arrange(desc(value)) %>%
   top_n(10) %>%
    tidyr::separate(genus,into=c("Domain","Phylum","Class","Order","Family","Genus"),sep=";") %>%
@@ -599,17 +603,50 @@ tipping_point =
   as.data.frame(check.names=FALSE) %>% set_colnames("Tip")
 
 merge(t(genus[bistable_dominant_genera,])+10^-4, mapping_file[,c("X.SampleID", "Time", "DSS")], by.x="row.names", by.y="X.SampleID") %>%
-  melt(.,id.vars=c("Row.names","Time", "DSS")) %>% 
+  reshape2::melt(.,id.vars=c("Row.names","Time", "DSS")) %>% 
   merge(.,tipping_point, by.x="variable", by.y="row.names", all = TRUE ) %>%
   filter(DSS == "3" | DSS == "2" | DSS == "1") %>%
   ggplot() + 
   geom_histogram(aes(x=value), fill="white", bins = 20) + geom_density(aes(x=value, y = ..count../6)) +
   facet_wrap(~gsub(";","\n",gsub("D_","",variable)), scale="free") + 
   scale_x_log10() + theme_dark() + 
-  geom_vline(aes(xintercept = Tip), col="red", size=2, alpha = 0.75) + scale_y_log10() #+ geom_density(aes(x=value))
+  geom_vline(aes(xintercept = Tip), col="red", size=2, alpha = 0.75) + scale_y_log10() + xlab("Genus rel. abundance") -> plot_bimodality_genera #+ geom_density(aes(x=value))
+
+plot_bimodality_genera
+
+ggsave("Figure_supp_bimodality_genera.pdf")
 
 tipping_point 
 
+
+
+```
+
+
+```{r}
+
+
+#bistable_dominant_genera
+
+
+
+ f %>% 
+   abs %>%
+  apply(1,sum) %>%
+   as.matrix() %>%
+   as.data.frame() %>%
+   tibble::rownames_to_column("genus") %>%
+    dplyr::rename(value = V1 ) %>%
+   mutate(`detected\nbimodality` = ifelse(genus %in% bistable_dominant_genera, "yes", "no")) %>%
+    arrange(desc(value)) %>%
+  top_n(10, value) %>%
+   tidyr::separate(genus,into=c("Domain","Phylum","Class","Order","Family","Genus"),sep=";") %>%
+   ggplot() + 
+  geom_bar(aes(y=value, x=paste0("[",Family %>% gsub("D_4__","",.),"] ",Genus %>% gsub("D_5__","",.)) %>% reorder(.,value), fill=`detected\nbimodality` ), stat="identity") +
+   coord_flip() + xlab("") + ylab("Genus DMM weights") -> pB_akk
+
+
+pB_akk
 
 
 ```
@@ -1563,7 +1600,7 @@ ggraph(., layout = 'kk') +
     geom_edge_link(aes(colour = median),alpha=0.5, width=0.5) + 
   facet_edges(~hysteresis_grp , nrow=1) +   
   geom_node_text(aes(label = name),size=3) +
-  scale_edge_colour_gradient2(low = "red", mid="yellow", high="green") +
+  scale_edge_colour_gradient2("Rho",low = "red", mid="yellow", high="green") +
   theme_dark() + theme(axis.text.x = element_blank(), axis.text.y = element_blank(),
                        axis.ticks.x=element_blank(), axis.ticks.y=element_blank(),
                        strip.text.x = element_text(size = 10),
@@ -1575,6 +1612,20 @@ global_akk_net_plot
 ggsave("global_akk_net.pdf")
 
 ```
+
+
+
+```{r, fig.height=8, fig.width=8}
+cowplot::plot_grid(
+  global_akk_net_plot,
+  plot_stabibility_resilience,nrow = 2, rel_heights = c(1,2))
+
+
+
+
+
+```
+
 
 
 

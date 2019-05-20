@@ -192,7 +192,7 @@ mapping_file %>%
 mapping_file %>%
   merge(.,rat_metadata, by.x="Rat_ID", by.y="Animal_id_2") %>%
   filter(Study_group == "G7") %>%
-  filter(Time %in% c("Tm1","Tm13","Tm20","Tm34","Tm41","Tm7")) %>% #do not select -49
+  filter(Time %in% c("Tm1","Tm13","Tm20","Tm34","Tm41","Tm49","Tm7")) %>% #do not select -49
   #filter(Time_days > -49) %>%
   #mutate(Time_days = gsub("Tm","-",Time) %>% as.character %>% as.numeric) %>%
   #mutate(Diet = ifelse(Time_days < -20, "M-Z (chow)","AIN93 (low fiber)")) %>%
@@ -202,7 +202,7 @@ mapping_file %>%
 genus[,select_samples %>% as.character] %>%
   BiotypeR::dist.JSD() -> genus_select_jsd
 
-genus_select_pco =  dudi.pco(genus_select_jsd, scannf = F, nf=3)
+genus_select_pco =  ade4::dudi.pco(genus_select_jsd, scannf = F, nf=3)
 
 mapping_file %>%
   merge(.,rat_metadata, by.x="Rat_ID", by.y="Animal_id_2") %>%
@@ -212,7 +212,7 @@ mapping_file %>%
   mutate(Diet = ifelse(Time_days < -20, "M-Z (chow)","AIN93 (low fiber)")) %>%
   merge(.,observed_otu, by.x="samplenr", by.y="row.names", all = FALSE) %>%
   merge(.,genus_select_pco$li,by.x="samplenr",by.y="row.names") %>%
-  filter(Time_days > -49) %>%
+  filter(Time_days >= -49) %>%
   ggplot() + geom_point(aes(x=-A1,y=A2,col=Diet),size=4, alpha=0.5) + 
   xlab("PC1") + ylab("PC2") -> pA_diet
 
@@ -343,15 +343,15 @@ mapping_file %>%
   merge(.,observed_otu, by.x="samplenr", by.y="row.names", all = FALSE) %>%
   merge(.,t(genus[idx,select_samples %>% as.character]), by.x="samplenr", by.y="row.names") %>%
   select(Rat_ID,Diet,Time_days,contains("Bacteria")) %>%
-  melt(id.vars=c("Rat_ID","Time_days","Diet")) %>%
+  reshape2::melt(id.vars=c("Rat_ID","Time_days","Diet")) %>%
   mutate(
     variable = variable %>% 
       as.character %>% 
       gsub("D_5__","",.) %>%
       gsub("D_4__","",.) %>%
-      str_split_fixed(.,pattern=";",6) %>%  .[,5:6] %>% apply(1,function(x){paste(x[1],x[2])}) %>% gsub(" ","\n",.)
+      stringr::str_split_fixed(.,pattern=";",6) %>%  .[,5:6] %>% apply(1,function(x){paste(x[1],x[2])}) %>% gsub(" ","\n",.)
       ) %>%
-  filter(Time_days > -49) %>%
+  #filter(Time_days >= -49) %>%
   ggplot() + geom_point(aes(x=Time_days, y=value+10^-6, col=Diet)) +
   geom_smooth(aes(x=Time_days, y=value+10^-6,group=variable),col="grey") +
   scale_y_log10() + #scale_color_brewer("", type="qual") + 

@@ -84,11 +84,11 @@ ggsave("Figure1_study_design_physio.pdf",h=8,w=12)
 ```{r, fig.height=5, fig.width=12, message=FALSE, warning=FALSE}
 
 cowplot::plot_grid(
-pA_diet + scale_color_manual(values=Grp_color[2:1]) + guides(color=FALSE),
-pC_diet + scale_color_manual(values=Grp_color[2:1]), labels="AUTO", rel_widths = c(1.1,2)
+pA_diet + scale_color_manual(values=Grp_color[2:1]) + guides(color=FALSE) + cowplot::theme_cowplot(),
+pC_diet + scale_color_manual(values=Grp_color[2:1]) + cowplot::theme_cowplot() , labels="AUTO", rel_widths = c(1.1,2)
 )
 
-ggsave("Supp_Figure1.pdf",h=5,w=12)
+ggsave("Supp_Figure1_Diet_switch.pdf",h=5,w=12)
 
 
 #most of OTU disaparing fall into discriminating genus
@@ -135,13 +135,18 @@ Figure 4:
 
 
 
-```{r, fig.height=8, fig.width=14, message=FALSE, warning=FALSE}
+```{r, fig.height=8, fig.width=12, message=FALSE, warning=FALSE}
 
 
-plot_grid(pB_akk, pA_akk, PD_akk_PCoA_plot, pC_Akk, ncol=2,labels = c("A","B","C","D"), rel_heights = c(2,2))
+cowplot::plot_grid(
+  pB_akk + cowplot::theme_cowplot() + theme(legend.position = c(0.5,0.5)) + scale_fill_manual("Dectected\nbimodality", values=c("grey","black")), 
+  pA_akk + xlab("PCo1") + ylab("PCo2") , 
+  PD_akk_PCoA_plot + cowplot::theme_cowplot(), 
+  pC_Akk + xlab("Akkermansia rel. abundance") , ncol=2,
+  labels = c("A","B","C","D"), rel_heights = c(2,2))
 
 
-ggsave("Figure_3_Akkermansia.pdf")
+ggsave("Figure_2_NEW_Akkermansia_DMM_bimodality.pdf")
 
 
 
@@ -150,7 +155,17 @@ ggsave("Figure_3_Akkermansia.pdf")
 
 
 
+## Figure 4
 
+```{r, fig.height=8, fig.width=8}
+cowplot::plot_grid(
+  global_akk_net_plot,
+  plot_stabibility_resilience,nrow = 2, rel_heights = c(1,2))
+
+ggsave("Figure4_global_dynamics_stability.pdf")
+
+
+```
 
 
 
