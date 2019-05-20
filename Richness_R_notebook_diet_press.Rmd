@@ -100,7 +100,7 @@ mapping_file %>%
   mutate(Time_days = gsub("Tm","-",Time) %>% as.character %>% as.numeric) %>%
   mutate(Diet = ifelse(Time_days < -20, "M-Z (chow)","AIN93 (low fiber)")) %>%
   merge(.,observed_otu, by.x="samplenr", by.y="row.names", all = FALSE) %>%
-  filter(Time_days > -49) %>%
+  filter(Time_days >= -49) %>%
   as_tibble %>%
   mutate(Time = Time %>% as.character) %>%
   #xtabs(~Time+Study_group, data = .) %>%

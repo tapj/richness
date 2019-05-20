@@ -35,23 +35,40 @@ Panel C: microbiota shifts with diet (Richess OTU)
 Panel D: DSS – dose response (colong length, mono, globlet, poids?)
 Panel E: histo – Pictures
 
-```{r, fig.height=12, fig.width=12}
+```{r, fig.height=8, fig.width=12}
 
 study_design <- png::readPNG("design_richness.png")
 hypothesis   <- png::readPNG("hypothesis_model.png")
 histology    <- png::readPNG("histology_DSS.png")
 
-study_design_grob1 <- rasterGrob(study_design)
-hypothesis_grob2   <- rasterGrob(hypothesis)
-histology_grob3    <- rasterGrob(histology)
+study_design_grob1 <- grid::rasterGrob(study_design)
+hypothesis_grob2   <- grid::rasterGrob(hypothesis)
+histology_grob3    <- grid::rasterGrob(histology)
 
 
 load("diet_press_plot.rda")
 load("p_physio.rda")
 
-cowplot::plot_grid(plot_grid(hypothesis_grob2, study_design_grob1, rel_widths = c(1,2), labels=c("A","B")), plot_grid(pB_diet+ scale_color_manual(values=Grp_color[2:1]), histology_grob3,labels=c("C","D"), rel_widths = c(1.2,1)), p_physio, ncol=1, rel_heights = c(1,1,1.5), labels=c("","","E"))
+# cowplot::plot_grid(
+#   cowplot::plot_grid(hypothesis_grob2, study_design_grob1, rel_widths = c(1,2), labels=c("A","B")), 
+#   cowplot::plot_grid(pB_diet+ scale_color_manual(values=Grp_color[2:1]), histology_grob3,labels=c("C","D"), rel_widths = c(1.2,1)), p_physio, ncol=1, rel_heights = c(1,1,1.5), labels=c("","","E"))
 
-ggsave("Figure1.pdf",h=12,w=12)
+cowplot::plot_grid(
+  cowplot::plot_grid(
+    study_design_grob1, 
+    pB_diet + scale_color_manual(values=Grp_color[2:1]) + cowplot::theme_cowplot() + theme(legend.position = c(0.1,0.2)), 
+    rel_widths = c(1.5,1), labels=c("A","B")),
+  p_physio + 
+    #geom_vline(aes(xintercept = 3.5), linetype=2, size=2, color="grey") + 
+    #annotate("text", aes(y=10, x=3.5), label="physiologic\nchange point")  + 
+    cowplot::theme_cowplot() ,
+  ncol=1,
+  rel_heights = c(1,1.5),
+  labels=c("","C"))
+
+
+
+ggsave("Figure1_study_design_physio.pdf",h=8,w=12)
 
 
 
