@@ -160,7 +160,7 @@ ggsave("Figure_2_NEW_Akkermansia_DMM_bimodality.pdf")
 ```{r, fig.height=8, fig.width=8}
 cowplot::plot_grid(
   global_akk_net_plot,
-  plot_stabibility_resilience,nrow = 2, rel_heights = c(1,2))
+  plot_stabibility_resilience + cowplot::theme_cowplot(),nrow = 2, rel_heights = c(1,2))
 
 ggsave("Figure4_global_dynamics_stability.pdf")
 
