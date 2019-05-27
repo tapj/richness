@@ -192,7 +192,7 @@ mapping_file %>%
 mapping_file %>%
   merge(.,rat_metadata, by.x="Rat_ID", by.y="Animal_id_2") %>%
   filter(Study_group == "G7") %>%
-  filter(Time %in% c("Tm1","Tm13","Tm20","Tm34","Tm41","Tm49","Tm7")) %>% #do not select -49
+  filter(Time %in% c("Tm1","Tm13","Tm20","Tm34","Tm41","Tm49","Tm7")) %>% #include also -49
   #filter(Time_days > -49) %>%
   #mutate(Time_days = gsub("Tm","-",Time) %>% as.character %>% as.numeric) %>%
   #mutate(Diet = ifelse(Time_days < -20, "M-Z (chow)","AIN93 (low fiber)")) %>%
@@ -222,6 +222,68 @@ pA_diet
 
 
 ```
+
+
+### between and within diet
+
+```{r}
+
+mapping_file %>%
+  merge(.,rat_metadata, by.x="Rat_ID", by.y="Animal_id_2") %>%
+  filter(Study_group == "G7") %>%
+  filter(Time %in% c("Tm1","Tm13","Tm20","Tm34","Tm41","Tm49","Tm7")) %>%
+  mutate(Time_days = gsub("Tm","-",Time) %>% as.character %>% as.numeric) %>%
+  mutate(Diet = ifelse(Time_days < -20, "M-Z (chow)","AIN93 (low fiber)")) %>%
+  select(samplenr,Rat_ID,Diet,Time_days)
+
+
+genus_select_jsd %>%
+  as.matrix %>%
+  reshape2::melt() %>%
+  merge(.,
+    mapping_file %>%
+  merge(.,rat_metadata, by.x="Rat_ID", by.y="Animal_id_2") %>%
+  filter(Study_group == "G7") %>%
+  filter(Time %in% c("Tm1","Tm13","Tm20","Tm34","Tm41","Tm49","Tm7")) %>%
+  mutate(Time_days = gsub("Tm","-",Time) %>% as.character %>% as.numeric) %>%
+  mutate(Diet = ifelse(Time_days < -20, "M-Z (chow)","AIN93 (low fiber)")) %>%
+  select(samplenr,Rat_ID,Diet,Time_days),
+  by.y="samplenr",
+  by.x="Var1"
+  ) %>%
+  
+  merge(.,
+    mapping_file %>%
+  merge(.,rat_metadata, by.x="Rat_ID", by.y="Animal_id_2") %>%
+  filter(Study_group == "G7") %>%
+  filter(Time %in% c("Tm1","Tm13","Tm20","Tm34","Tm41","Tm49","Tm7")) %>%
+  mutate(Time_days = gsub("Tm","-",Time) %>% as.character %>% as.numeric) %>%
+  mutate(Diet = ifelse(Time_days < -20, "M-Z (chow)","AIN93 (low fiber)")) %>%
+  select(samplenr,Rat_ID,Diet,Time_days),
+  by.y="samplenr",
+  by.x="Var2"
+  ) %>%
+  filter(Rat_ID.x==Rat_ID.y) %>%
+  filter(Time_days.x != Time_days.y) %>%
+  mutate(diet_type= ifelse(Diet.x == Diet.y, "same diet", "different diet")  ) %>%
+  mutate(diet_test =  ifelse( diet_type == "same diet", paste0("Within \n",Diet.x), "M-Z (chow)\nvs\nAIN93 (low fiber)" )) %>%
+  ggplot() + 
+  geom_boxplot(aes(x=diet_test,y=value, fill=diet_test)) +
+  xlab("Diet comparison within Rats") + ylab("JSD distance") +
+  scale_fill_manual(values=c("white",Grp_color[2:1])) +
+  guides(fill=FALSE) +
+  cowplot::theme_cowplot() -> plot_diet_between_within
+  
+  
+
+plot_diet_between_within
+
+
+
+```
+
+
+
 
 ## genera changes
 

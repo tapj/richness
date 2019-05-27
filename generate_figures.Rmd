@@ -84,8 +84,11 @@ ggsave("Figure1_study_design_physio.pdf",h=8,w=12)
 ```{r, fig.height=5, fig.width=12, message=FALSE, warning=FALSE}
 
 cowplot::plot_grid(
+cowplot::plot_grid(
+  
 pA_diet + scale_color_manual(values=Grp_color[2:1]) + guides(color=FALSE) + cowplot::theme_cowplot(),
-pC_diet + scale_color_manual(values=Grp_color[2:1]) + cowplot::theme_cowplot() , labels="AUTO", rel_widths = c(1.1,2)
+plot_diet_between_within, ncol=1, labels="AUTO"),
+pC_diet + scale_color_manual(values=Grp_color[2:1]) + cowplot::theme_cowplot() , labels=c(NA,"C"),  rel_widths = c(1.1,2)
 )
 
 ggsave("Supp_Figure1_Diet_switch.pdf",h=5,w=12)
