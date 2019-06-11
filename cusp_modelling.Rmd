@@ -1,0 +1,98 @@
+---
+title: "cusp modeling"
+output: html_notebook
+---
+
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(cusp)
+
+
+
+```
+
+
+
+
+```{r}
+
+
+
+
+akk_df %>%
+  filter(Study_group %in% c("G5","G6","G7")) %>%
+  filter(Time > -2) %>%
+  arrange(Rat_ID,(Time)) %>%
+  group_by(Rat_ID) %>%
+  mutate(genus_ratio_lead = lead(genus)) %>%
+  ggplot + 
+  geom_point(aes(x=log10(genus+10^-6),y=log10(genus_ratio_lead+10^-6) - log10(genus+10^-6) , col=hysteresis_grp)) +
+  geom_hline(yintercept = 0) +
+  geom_vline(xintercept = -2, linetype=2) +
+  xlab("Akkermansia") + ylab("t+1/t") +
+  cowplot::theme_cowplot()
+
+
+
+akk_df %>%
+  filter(Study_group %in% c("G5","G6","G7")) %>%
+  filter(Time > -2) %>%
+  arrange(Rat_ID,(Time)) %>%
+  group_by(Rat_ID) %>%
+  mutate(genus_ratio_lead = lead(genus)) %>%
+  ggplot + 
+  geom_boxplot(aes(x=genus>0.01, y = log10(genus_ratio_lead+10^-6) - log10(genus+10^-6), fill=hysteresis_grp))
+
+
+
+
+```
+
+
+
+
+```{r}
+
+akk_tipping_retention %>%
+  select(Rat_ID, Boot.Estimate) %>%
+  merge(.,akk_df, by="Rat_ID") %>%
+  select(Rat_ID,Boot.Estimate,genus,press_cumul_day,hysteresis_grp) %>%
+  mutate(genus_log10 = log10(genus+10^-6),  press_cumul_day = press_cumul_day %>% as.character %>% as.numeric ) -> akk_cusp_df
+  
+
+akk_cusp_fit <- cusp(y ~ genus,
+    beta ~ press_cumul_day,
+    alpha ~ Boot.Estimate,
+    data = akk_cusp_df)
+
+
+
+```
+
+
+```{r}
+
+summary(akk_cusp_fit, logistic=TRUE)
+
+plot(akk_cusp_fit)
+
+
+```
+
+
+
+
+```{r}
+
+cusp::cusp3d(akk_cusp_fit)
+
+
+
+```
+
+
+
+
