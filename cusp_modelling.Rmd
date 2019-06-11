@@ -87,12 +87,49 @@ plot(akk_cusp_fit)
 
 ```{r}
 
-cusp::cusp3d(akk_cusp_fit)
-
+pdf("cups.pdf", h=5,w=5)
+cusp::cusp3d(akk_cusp_fit,w=0)
+dev.off()
 
 
 ```
 
 
 
+
+
+```{r}
+
+
+pdf("cups_animate.pdf", h=5,w=5)
+
+for(i in 90:160) {
+cusp::cusp3d(akk_cusp_fit,w=0, theta = i)
+}
+  
+  
+dev.off()
+
+#system("convert -delay 40 *.pdf Akk_cusp.gif")
+
+
+```
+
+
+
+```{r}
+
+img <- image_graph(340, 340, res = 96, bg = "white")
+
+out <- for(i in c(30:160,159:30)) {
+cusp::cusp3d(akk_cusp_fit,w=0, theta = i)
+}
+
+dev.off()
+animation <- image_animate(img, fps = 20)
+print(animation)
+
+image_write(animation, "Akk_cusp2.gif")
+
+```
 
